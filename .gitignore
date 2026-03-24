@@ -14,5 +14,11 @@ ml/models/*.joblib
 ml/models/*.pt
 ml/models/*.json
 ml/AIDE_Train.ipynb
+!ml/models/bulk_modulus.joblib
+!ml/models/formation_energy.joblib
+!ml/models/shear_modulus.joblib
+!ml/models/multitask_nn.pt
+!ml/models/transfer_yield.pt
+!ml/models/train_report.json
 .streamlit/
 .codex_logs/

@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
   - `README.md`
   - `CONTRIBUTING.md`
   - `CHANGELOG.md`
+- Added baseline runtime ML model artifacts to `ml/models` for out-of-the-box prediction support.
 
 ### Changed
 
@@ -20,4 +21,3 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Reduced risk of silently excluding low-weight domains during close-composition comparisons by showing explicit warning when subset mode is active.
-

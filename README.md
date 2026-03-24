@@ -47,6 +47,19 @@ See `.env.example` for a ready template.
 - `AIDE_LOCAL_LLM_MODELS`
 - `AIDE_LOCAL_INTENT_MODELS`
 
+## ML Models
+
+Baseline runtime ML model files are versioned in `ml/models` so predictions work after clone.
+
+- `bulk_modulus.joblib`
+- `formation_energy.joblib`
+- `shear_modulus.joblib`
+- `multitask_nn.pt`
+- `transfer_yield.pt`
+- `train_report.json`
+
+You can retrain/refresh models using `ml/train.py` and related ML scripts.
+
 ## Domain Coverage Note
 
 In the Interactive Composition Editor:
@@ -62,4 +75,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
-
