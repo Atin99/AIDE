@@ -339,10 +339,11 @@ def _rule_based_intent(query):
         result["notes"] = f"compare {left.strip()} vs {right.strip()}".strip()
         return _enforce_structured_core(result, query)
 
-    alloy_name, composition = _lookup_alloy_phrase(query)
-    if alloy_name:
-        result["alloy_name"] = alloy_name
-        result["composition"] = composition
+    if not explicit_comp:
+        alloy_name, composition = _lookup_alloy_phrase(query)
+        if alloy_name:
+            result["alloy_name"] = alloy_name
+            result["composition"] = composition
 
     if _looks_like_modify(q):
         result["mode"] = "modify"
@@ -603,6 +604,7 @@ def _lookup_alloy_phrase(text):
             return found["key"], found.get("composition_wt")
 
     candidate_tokens = re.findall(r"\b[A-Za-z]*\d+[A-Za-z0-9\-]*\b", clean)
+    candidate_tokens = [tok for tok in candidate_tokens if re.search(r"[A-Za-z]", tok)]
     keyword_tokens = re.findall(
         r"\b(?:inconel|zircaloy|duralumin|waspaloy|stellite|cantor)\b",
         clean,
