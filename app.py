@@ -89,6 +89,19 @@ COMMON_ELEMENTS = [
     "W", "Co", "Cu", "Nb", "Zr", "N", "Ta", "Hf", "B", "Re",
 ]
 
+EDITOR_WEIGHT_PROFILES = {
+    "Auto (from goal text)": "auto",
+    "Balanced": "balanced",
+    "Structural": "structural",
+    "Corrosion-critical": "corrosion",
+    "High-temperature": "high_temp",
+    "Nuclear": "nuclear",
+    "Biomedical": "biomedical",
+    "Conductive/Electronic": "conductive",
+    "Manufacturing": "manufacturing",
+    "Catalysis": "catalysis",
+}
+
 
 def fmt_comp(comp, top=6):
     return "  ".join(f"{s}:{v*100:.1f}%"
@@ -723,6 +736,7 @@ with tab_chat:
                     _render_result(result, show_detail, use_ml)
 
     if prompt := st.chat_input("Ask about alloys... (e.g. 'design a marine stainless steel')"):
+        st.session_state.last_user_prompt = prompt
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         st.session_state.memory.add_user_message(prompt)
 
@@ -735,6 +749,7 @@ with tab_chat:
             with st.status("Thinking...", expanded=True) as status:
                 st.write("Classifying intent...")
                 intent = classify_intent(prompt, memory=st.session_state.memory)
+                st.session_state.last_intent = dict(intent)
                 mode = intent.get("mode", "design")
                 intent["temperature_K"] = intent.get("temperature_K") or T_op
                 intent["n_results"] = intent.get("n_results") or n_cand
@@ -854,6 +869,16 @@ with tab_editor:
               delta=f"{total_pct - 100:.2f}%" if abs(total_pct - 100) > 0.01 else "OK")
 
     st.markdown("---")
+    st.subheader("Scoring Context")
+    default_goal = st.session_state.get("editor_goal_text", "") or st.session_state.get("last_user_prompt", "")
+    goal_text = st.text_input("Application / objective", value=default_goal, key="editor_goal_text")
+    profile_label = st.selectbox("Weighting profile", options=list(EDITOR_WEIGHT_PROFILES.keys()),
+                                 index=0, key="editor_weight_profile_label")
+    focused_mode = st.checkbox("Focused mode (faster, context-prioritized)", value=True, key="editor_focused_mode")
+    max_domains = st.slider("Max domains in focused mode", 8, 42, 16, 1,
+                            disabled=not focused_mode, key="editor_max_domains")
+
+    st.markdown("---")
     st.subheader("Domains")
     all_domains = st.checkbox("Run all 42 domains", value=True)
     selected_domains = []
@@ -882,13 +907,29 @@ with tab_editor:
                     st.stop()
 
             with st.spinner("Analyzing..."):
+                context_intent = {}
+                if goal_text.strip():
+                    try:
+                        context_intent = classify_intent(goal_text, memory=st.session_state.memory)
+                    except Exception:
+                        context_intent = {}
+
+                context_app = context_intent.get("application")
+                context_props = context_intent.get("target_properties", [])
+                profile_mode = EDITOR_WEIGHT_PROFILES.get(profile_label, "auto")
+                domain_limit = max_domains if (all_domains and focused_mode) else None
+
                 if all_domains:
                     result = run_all(comp_mol, T_K=T_editor, verbose=True,
-                                     dpa_rate=dpa_rate, process=process)
+                                     dpa_rate=dpa_rate, process=process,
+                                     application=context_app, target_properties=context_props,
+                                     weight_profile=profile_mode, max_domains=domain_limit)
                 else:
                     result = run_all(comp_mol, T_K=T_editor, verbose=True,
                                      domains_focus=selected_domains,
-                                     dpa_rate=dpa_rate, process=process)
+                                     dpa_rate=dpa_rate, process=process,
+                                     application=context_app, target_properties=context_props,
+                                     weight_profile=profile_mode)
             
             st.session_state.editor_result = result
             st.session_state.editor_comp_wt = comp_wt
@@ -899,11 +940,24 @@ with tab_editor:
         comp_wt = st.session_state.editor_comp_wt
         comp_mol = st.session_state.editor_comp_mol
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Score", f"{result['composite_score']:.1f}/100")
-        c2.metric("Pass", result["n_pass"])
-        c3.metric("Warn", result["n_warn"])
-        c4.metric("Fail", result["n_fail"])
+        raw_score = result.get("composite_score_raw", result["composite_score"])
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Weighted Score", f"{result['composite_score']:.1f}/100")
+        c2.metric("Raw Score", f"{raw_score:.1f}/100")
+        c3.metric("Pass", result["n_pass"])
+        c4.metric("Warn", result["n_warn"])
+        c5.metric("Fail", result["n_fail"])
+
+        profile_used = ", ".join(result.get("weight_profiles_used", []))
+        app_ctx = result.get("application_context") or "none"
+        if profile_used:
+            st.caption(f"Scoring profile: {profile_used} | Application context: {app_ctx}")
+
+        weights_used = result.get("domain_weights_used", {})
+        if weights_used:
+            top_weights = sorted(weights_used.items(), key=lambda x: -x[1])[:10]
+            rows = [{"Domain": d, "Weight %": round(w * 100, 2)} for d, w in top_weights]
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
         show_properties(comp_mol)
 

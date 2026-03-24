@@ -569,8 +569,10 @@ class PhysicsMLEvaluator:
         import math
         for cand in candidates:
             try:
+                priority_map = research_data.domain_weights if research_data else None
                 result = run_all(cand.composition, T_K=T_K, weather=weather, verbose=False,
-                                 domains_focus=domains_focus, dpa_rate=dpa_rate)
+                                 domains_focus=domains_focus, dpa_rate=dpa_rate,
+                                 domain_priority=priority_map)
                 cand.physics_result = result
                 
                 base_score = result.get("composite_score", 0)
