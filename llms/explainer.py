@@ -131,7 +131,7 @@ def explain_comparison(name1, name2, result):
 
 def explain_single_domain(domain_name, score, checks_str, comp_str):
     if not llm_available():
-        return "LLM not available for detailed domain explanation."
+        return _template_single_domain(domain_name, score, checks_str, comp_str)
     
     msg = (f"Domain: {domain_name}\nScore: {score:.1f}/100\nComposition: {comp_str}\n"
            f"Checks:\n{checks_str}\n\n"
@@ -140,9 +140,9 @@ def explain_single_domain(domain_name, score, checks_str, comp_str):
     try:
         response = chat([{"role": "system", "content": EXPLAIN_SYSTEM},
                          {"role": "user", "content": msg}], max_tokens=300, temperature=0.1)
-        return response or "Could not generate explanation."
+        return response or _template_single_domain(domain_name, score, checks_str, comp_str)
     except Exception:
-        return "Error generating explanation."
+        return _template_single_domain(domain_name, score, checks_str, comp_str)
 
 
 DOMAIN_REMEDIES = {
@@ -216,3 +216,42 @@ def _template_comparison(name1, name2, result):
     wins_1 = sum(1 for c in comparison if c.get("winner") == name1)
     wins_2 = sum(1 for c in comparison if c.get("winner") == name2)
     return f"{winner} wins overall ({wins_1} vs {wins_2} domain wins)."
+
+
+def _template_single_domain(domain_name, score, checks_str, comp_str):
+    lines = [ln.strip() for ln in str(checks_str or "").splitlines() if ln.strip()]
+    fails = [ln for ln in lines if ln.startswith("[FAIL]")]
+    warns = [ln for ln in lines if ln.startswith("[WARN]")]
+    passes = [ln for ln in lines if ln.startswith("[PASS]")]
+    infos = [ln for ln in lines if ln.startswith("[INFO]")]
+
+    quality = "strong" if score >= 75 else ("mixed" if score >= 45 else "weak")
+    summary = (
+        f"{domain_name} is {quality} ({score:.1f}/100) for {comp_str}. "
+        f"Checks: PASS={len(passes)}, WARN={len(warns)}, FAIL={len(fails)}, INFO={len(infos)}."
+    )
+
+    details = []
+    if fails:
+        details.append("Critical limits failing:")
+        details.extend(f"- {ln[7:]}" for ln in fails[:3])
+    elif warns:
+        details.append("Main caution points:")
+        details.extend(f"- {ln[7:]}" for ln in warns[:3])
+    elif passes:
+        details.append("Main drivers of this score:")
+        details.extend(f"- {ln[7:]}" for ln in passes[:3])
+
+    remedy = ""
+    lower_text = f"{domain_name} {checks_str}".lower()
+    for key, text in DOMAIN_REMEDIES.items():
+        if key in lower_text:
+            remedy = text
+            break
+    if remedy:
+        details.append(f"Recommended composition direction: {remedy}")
+
+    if not details:
+        details.append("No detailed checks were available for this domain.")
+
+    return summary + "\n\n" + "\n".join(details)

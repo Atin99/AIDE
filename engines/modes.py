@@ -85,7 +85,14 @@ class ModifyEngine:
                 return {"mode": "modify", "error": f"Unknown alloy: {alloy_name}"}
         comp = _convert_wt_to_mol(comp_wt)
         T_K = intent.get("temperature_K") or 298.0
-        original = run_all(comp, T_K=T_K, weather=intent.get("environment"), verbose=verbose)
+        original = run_all(
+            comp,
+            T_K=T_K,
+            weather=intent.get("environment"),
+            verbose=verbose,
+            application=intent.get("application"),
+            target_properties=intent.get("target_properties"),
+        )
         weak = sorted(original["domain_results"], key=lambda dr: dr.score())[:5]
         modify_intent = dict(intent)
         modify_intent["notes"] = (f"Improve {alloy_name}. Current: {_fmt_comp(comp)}. "
@@ -139,7 +146,14 @@ class StudyEngine:
                 comp_wt = {"Fe": 0.60, "Cr": 0.18, "Ni": 0.10, "Mn": 0.02, "Mo": 0.10}
         comp = _convert_wt_to_mol(comp_wt)
         T_K = intent.get("temperature_K") or 298.0
-        analysis = run_all(comp, T_K=T_K, verbose=True, domains_focus=intent.get("domains_focus"))
+        analysis = run_all(
+            comp,
+            T_K=T_K,
+            verbose=True,
+            domains_focus=intent.get("domains_focus"),
+            application=intent.get("application"),
+            target_properties=intent.get("target_properties"),
+        )
         result["analysis"] = analysis
         result["composition"] = comp
         for dr in analysis["domain_results"]:
@@ -186,8 +200,20 @@ class CompareEngine:
         comp1 = _convert_wt_to_mol(comp1_wt)
         comp2 = _convert_wt_to_mol(comp2_wt)
         T_K = intent.get("temperature_K") or 298.0
-        r1 = run_all(comp1, T_K=T_K, verbose=True)
-        r2 = run_all(comp2, T_K=T_K, verbose=True)
+        r1 = run_all(
+            comp1,
+            T_K=T_K,
+            verbose=True,
+            application=intent.get("application"),
+            target_properties=intent.get("target_properties"),
+        )
+        r2 = run_all(
+            comp2,
+            T_K=T_K,
+            verbose=True,
+            application=intent.get("application"),
+            target_properties=intent.get("target_properties"),
+        )
         comparison = []
         for dr1, dr2 in zip(r1["domain_results"], r2["domain_results"]):
             comparison.append({"domain": dr1.domain_name, "score_1": dr1.score(),
@@ -241,7 +267,13 @@ class GeometryEngine:
                 comp_wt = a["composition_wt"]
         if comp_wt:
             comp = _convert_wt_to_mol(comp_wt)
-            physics = run_all(comp, T_K=T_K, verbose=True)
+            physics = run_all(
+                comp,
+                T_K=T_K,
+                verbose=True,
+                application=intent.get("application"),
+                target_properties=intent.get("target_properties"),
+            )
             try:
                 from engineering.calculations import full_engineering_analysis
                 eng = full_engineering_analysis(comp, geometry, loading, T_K)
