@@ -874,13 +874,26 @@ with tab_editor:
     goal_text = st.text_input("Application / objective", value=default_goal, key="editor_goal_text")
     profile_label = st.selectbox("Weighting profile", options=list(EDITOR_WEIGHT_PROFILES.keys()),
                                  index=0, key="editor_weight_profile_label")
-    focused_mode = st.checkbox("Focused mode (faster, context-prioritized)", value=True, key="editor_focused_mode")
-    max_domains = st.slider("Max domains in focused mode", 8, 42, 16, 1,
-                            disabled=not focused_mode, key="editor_max_domains")
+    focused_mode = st.checkbox(
+        "Fast subset mode (runs only top-weighted domains)",
+        value=False,
+        key="editor_fast_subset_mode",
+    )
+    max_domains = st.slider(
+        "Domains to evaluate in fast subset mode",
+        16, 42, 30, 1,
+        disabled=not focused_mode,
+        key="editor_fast_subset_max_domains",
+    )
+    if focused_mode:
+        st.caption(
+            "Fast subset mode is quicker but can hide low-weight domains. "
+            "Turn it off for close-composition comparisons."
+        )
 
     st.markdown("---")
     st.subheader("Domains")
-    all_domains = st.checkbox("Run all 42 domains", value=True)
+    all_domains = st.checkbox("Run full 42-domain sweep (recommended)", value=True)
     selected_domains = []
     if not all_domains:
         selected_domains = st.multiselect("Pick domains",
@@ -952,6 +965,12 @@ with tab_editor:
         app_ctx = result.get("application_context") or "none"
         if profile_used:
             st.caption(f"Scoring profile: {profile_used} | Application context: {app_ctx}")
+        n_domains = int(result.get("n_domains", len(result.get("domain_results", []))))
+        if all_domains and n_domains < len(DOMAIN_NAMES):
+            st.warning(
+                f"Fast subset mode evaluated {n_domains}/{len(DOMAIN_NAMES)} domains. "
+                "Disable fast subset mode to include low-weight domains for tie-breaking."
+            )
 
         weights_used = result.get("domain_weights_used", {})
         if weights_used:
