@@ -1,3 +1,13 @@
+---
+title: AIDE v5
+emoji: "🧪"
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # AIDE v5
 
 AIDE (Alloy Intelligence and Design Engine) provides alloy analysis and design with multi-domain physics scoring, contextual weighting, and conversational workflows.
