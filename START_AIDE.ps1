@@ -11,6 +11,26 @@ Write-Host ""
 # Navigate to script directory
 Set-Location $PSScriptRoot
 
+function Get-WorkingPython {
+    $candidates = @(
+        @{ Label = ".venv312"; Path = ".venv312\Scripts\python.exe" },
+        @{ Label = ".venv"; Path = ".venv\Scripts\python.exe" },
+        @{ Label = "system"; Path = "python" }
+    )
+
+    foreach ($candidate in $candidates) {
+        try {
+            & $candidate.Path -c "import sys; print(sys.executable)" 1>$null 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                return $candidate
+            }
+        } catch {
+        }
+    }
+
+    throw "No working Python interpreter found."
+}
+
 # Check internet
 Write-Host "[1/3] Checking internet..." -ForegroundColor Yellow
 try {
@@ -24,32 +44,40 @@ try {
     Write-Host "[WARNING] Could not check internet." -ForegroundColor DarkYellow
 }
 
-# Activate venv
+# Select a working Python interpreter.
 Write-Host "[2/3] Setting up environment..." -ForegroundColor Yellow
-if (Test-Path ".venv\Scripts\Activate.ps1") {
-    & ".venv\Scripts\Activate.ps1"
-    Write-Host "[OK] Virtual environment activated (.venv)" -ForegroundColor Green
-} elseif (Test-Path ".venv312\Scripts\Activate.ps1") {
-    & ".venv312\Scripts\Activate.ps1"
-    Write-Host "[OK] Virtual environment activated (.venv312)" -ForegroundColor Green
-} else {
-    Write-Host "[INFO] No venv found, using system Python." -ForegroundColor DarkYellow
+try {
+    $python = Get-WorkingPython
+    if ($python.Label -eq "system") {
+        Write-Host "[INFO] No working venv found, using system Python." -ForegroundColor DarkYellow
+    } else {
+        Write-Host "[OK] Using Python from $($python.Label)" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "[ERROR] $_" -ForegroundColor Red
+    exit 1
 }
 
 # Install deps if needed
 try {
-    python -c "import uvicorn" 2>$null
+    & $python.Path -c "import uvicorn" 2>$null
     if ($LASTEXITCODE -ne 0) { throw "missing" }
 } catch {
     Write-Host "[SETUP] Installing requirements..." -ForegroundColor Yellow
-    pip install -r requirements.txt
+    & $python.Path -m pip install -r requirements.txt
 }
 
 # Kill stale port
 Write-Host "[3/3] Starting server..." -ForegroundColor Yellow
-$stale = Get-NetTCPConnection -LocalPort 9000 -State Listen -ErrorAction SilentlyContinue
+$stale = netstat -aon 2>$null | Select-String ":9000" | Select-String "LISTENING"
 if ($stale) {
-    $stale | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+    $stale | ForEach-Object {
+        $parts = ($_ -split "\s+") | Where-Object { $_ }
+        $pid = $parts[-1]
+        if ($pid -match "^\d+$") {
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        }
+    }
     Write-Host "[OK] Cleared stale process on port 9000." -ForegroundColor Green
 }
 
@@ -61,4 +89,4 @@ Write-Host "  Press Ctrl+C to stop." -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000 --reload
+& $python.Path -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000

@@ -21,23 +21,35 @@ if errorlevel 1 (
 REM Navigate to project directory
 cd /d "%~dp0"
 
-REM Check if venv exists and activate
+REM Pick a working Python interpreter.
 echo [2/3] Setting up environment...
-if exist ".venv\Scripts\activate.bat" (
-    call .venv\Scripts\activate.bat
-    echo [OK] Virtual environment activated (.venv)
-) else if exist ".venv312\Scripts\activate.bat" (
-    call .venv312\Scripts\activate.bat
-    echo [OK] Virtual environment activated (.venv312)
+set "PYTHON_EXE=python"
+set "PYTHON_LABEL=system"
+if exist ".venv312\Scripts\python.exe" (
+    .venv312\Scripts\python.exe -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=.venv312\Scripts\python.exe"
+        set "PYTHON_LABEL=.venv312"
+    )
+)
+if "%PYTHON_LABEL%"=="system" if exist ".venv\Scripts\python.exe" (
+    .venv\Scripts\python.exe -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_EXE=.venv\Scripts\python.exe"
+        set "PYTHON_LABEL=.venv"
+    )
+)
+if "%PYTHON_LABEL%"=="system" (
+    echo [INFO] No working virtual environment found, using system Python.
 ) else (
-    echo [INFO] No virtual environment found, using system Python.
+    echo [OK] Using Python from %PYTHON_LABEL%
 )
 
 REM Check if uvicorn is installed
-python -c "import uvicorn" >nul 2>&1
+%PYTHON_EXE% -c "import uvicorn" >nul 2>&1
 if errorlevel 1 (
     echo [SETUP] Installing requirements...
-    pip install -r requirements.txt
+    %PYTHON_EXE% -m pip install -r requirements.txt
 )
 
 REM Kill any existing process on port 9000
@@ -54,6 +66,6 @@ echo   Press Ctrl+C to stop the server.
 echo ============================================
 echo.
 
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000 --reload
+%PYTHON_EXE% -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000
 
 pause
