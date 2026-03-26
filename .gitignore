@@ -22,3 +22,5 @@ ml/AIDE_Train.ipynb
 !ml/models/train_report.json
 .streamlit/
 .codex_logs/
+deploy/hf_space_bundle/
+frontend/.wrangler/

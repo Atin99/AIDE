@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: aide-v5
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: AIDE_USE_LOCAL_LLM
+        value: 0
+      - key: AIDE_ENABLE_REMOTE_LLM
+        value: 1
+      - key: AIDE_USE_LOCAL_INTENT
+        value: 0
+    autoDeploy: false

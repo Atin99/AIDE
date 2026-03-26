@@ -44,7 +44,7 @@ class DesignEngine:
         weather = intent.get("environment")
         top_n = min(intent.get("n_results") or 10, 20)
         result = run_pipeline(query=query, intent=intent, on_step=on_step,
-                              max_iterations=4, T_K=T_K, weather=weather,
+                              max_iterations=2, T_K=T_K, weather=weather,
                               constraints=intent.get("constraints", {}),
                               dpa_rate=intent.get("dpa_rate", 1e-7),
                               pressure_MPa=intent.get("pressure_MPa", 0.0),

@@ -1,0 +1,9 @@
+.git
+.codex_logs
+.venv
+.venv312
+__pycache__
+**/__pycache__
+*.pyc
+frontend
+app.py

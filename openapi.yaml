@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: AIDE v5 API
+  version: 0.2.0
+  description: API wrapper for AIDE alloy engines
+servers:
+  - url: http://localhost:8000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: Service health
+  /api/v1/domains:
+    get:
+      summary: List supported domains
+      responses:
+        '200':
+          description: Domain list
+  /api/v1/run:
+    post:
+      summary: Unified endpoint for query-driven and composition-driven runs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                intent:
+                  type: object
+                composition:
+                  type: object
+                  additionalProperties:
+                    type: number
+                basis:
+                  type: string
+                  enum: [wt, mol]
+                temperature_K:
+                  type: number
+                overrides:
+                  type: object
+      responses:
+        '200':
+          description: Unified response
+  /api/v1/intent/classify:
+    post:
+      summary: Classify free text into engine intent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+              required: [query]
+      responses:
+        '200':
+          description: Intent payload
+  /api/v1/engine/run:
+    post:
+      summary: Legacy endpoint for engine run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Engine result
+  /api/v1/composition/analyze:
+    post:
+      summary: Legacy endpoint for composition analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Composition analysis result

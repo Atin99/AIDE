@@ -78,6 +78,10 @@ def _local_first():
     return _truthy_env("AIDE_LOCAL_FIRST", default=True)
 
 
+def _remote_enabled():
+    return _truthy_env("AIDE_ENABLE_REMOTE_LLM", default=False)
+
+
 def _local_base_url():
     return os.environ.get("AIDE_LOCAL_LLM_URL", "http://127.0.0.1:11434").strip().rstrip("/")
 
@@ -184,6 +188,8 @@ def _discover_local_providers(force_refresh=False):
 
 
 def _remote_providers():
+    if not _remote_enabled():
+        return []
     providers = []
     for spec in PROVIDER_SPECS:
         api_key = os.environ.get(spec["env"], "").strip()
@@ -405,12 +411,24 @@ def extract_json(text):
     except json.JSONDecodeError:
         pass
 
+    repaired = _repair_json_text(text)
+    if repaired and repaired != text:
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            pass
+
     match = re.search(r"```(?:json)?\s*([\s\S]+?)```", text, re.IGNORECASE)
     if match:
         try:
             return json.loads(match.group(1).strip())
         except json.JSONDecodeError:
-            pass
+            repaired = _repair_json_text(match.group(1).strip())
+            if repaired:
+                try:
+                    return json.loads(repaired)
+                except json.JSONDecodeError:
+                    pass
 
     for pattern in (r"(\{[\s\S]+\})", r"(\[[\s\S]+\])"):
         m = re.search(pattern, text)
@@ -418,5 +436,24 @@ def extract_json(text):
             try:
                 return json.loads(m.group(1))
             except json.JSONDecodeError:
+                repaired = _repair_json_text(m.group(1))
+                if repaired:
+                    try:
+                        return json.loads(repaired)
+                    except json.JSONDecodeError:
+                        pass
                 continue
     return None
+
+
+def _repair_json_text(text):
+    candidate = str(text or "").strip()
+    if not candidate:
+        return None
+
+    candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+    candidate = re.sub(r"(?<!\\)'", "\"", candidate)
+    candidate = re.sub(r"\bNone\b", "null", candidate)
+    candidate = re.sub(r"\bTrue\b", "true", candidate)
+    candidate = re.sub(r"\bFalse\b", "false", candidate)
+    return candidate

@@ -44,20 +44,78 @@ INTENT_SCHEMA = {
     "notes": ""
 }
 
-SYSTEM_PROMPT = """You are AIDE's intent extractor.
-Return ONLY one JSON object.
-Extract these fields exactly:
-- mode
-- alloy_name, alloy_name_2
-- composition, composition_2
-- application
-- target_properties
-- constraints
-- only_elements, must_include, exclude_elements
-- temperature_K, environment
-- notes
-Prefer design mode unless clear evidence for study/compare/chat/geometry/modify/explore.
-Never return prose or markdown."""
+SYSTEM_PROMPT = """You are AIDE intent extraction engine.
+Task: convert one user message into exactly one strict JSON object.
+Rules:
+1. Return only JSON. No prose. No markdown. No code fences.
+2. Use one mode from: design, modify, study, compare, explore, geometry, chat.
+3. If user asks comparison, mode must be compare.
+4. If user asks explanation/theory only, mode must be study.
+5. If user asks greeting/help only, mode must be chat.
+6. Otherwise default mode is design.
+7. Keep constraints numeric when possible.
+8. Preserve explicit element constraints and compositions.
+9. Notes must contain the original user intent in short form.
+10. Unknown fields are not allowed."""
+
+LOCAL_INTENT_FEW_SHOTS = [
+    {
+        "input": "design a marine stainless alloy with yield above 650 MPa at 80 C and low cost",
+        "output": {
+            "mode": "design",
+            "alloy_name": None,
+            "alloy_name_2": None,
+            "composition": None,
+            "composition_2": None,
+            "target_properties": ["corrosion_resistance", "high_strength"],
+            "problem": None,
+            "domains_focus": [],
+            "study_topic": None,
+            "geometry": None,
+            "loading": None,
+            "temperature_K": 353.15,
+            "environment": "mumbai_coastal",
+            "n_elements": None,
+            "n_results": None,
+            "constraints": {"min_yield_MPa": 650, "cost_level": "low"},
+            "base_element": None,
+            "only_elements": None,
+            "must_include": ["Fe", "Cr", "Mo"],
+            "exclude_elements": ["Re", "Ta", "Hf"],
+            "application": "stainless",
+            "chat_response": None,
+            "notes": "marine stainless design with high yield and low cost",
+        },
+    },
+    {
+        "input": "compare Inconel 718 vs SS316 for chloride service",
+        "output": {
+            "mode": "compare",
+            "alloy_name": "Inconel 718",
+            "alloy_name_2": "SS316",
+            "composition": None,
+            "composition_2": None,
+            "target_properties": ["corrosion_resistance"],
+            "problem": None,
+            "domains_focus": [],
+            "study_topic": None,
+            "geometry": None,
+            "loading": None,
+            "temperature_K": None,
+            "environment": "mumbai_coastal",
+            "n_elements": None,
+            "n_results": None,
+            "constraints": {},
+            "base_element": None,
+            "only_elements": None,
+            "must_include": [],
+            "exclude_elements": [],
+            "application": "stainless",
+            "chat_response": None,
+            "notes": "compare Inconel 718 and SS316 in chloride service",
+        },
+    },
+]
 
 APPLICATION_DEFAULT_PROPERTIES = {
     "stainless": ["corrosion_resistance", "oxidation_resistance"],
@@ -235,10 +293,21 @@ def _ask_local_llm(query, memory=None):
     timeout = float(os.environ.get("AIDE_LOCAL_LLM_TIMEOUT", "1.2"))
 
     schema_text = json.dumps(INTENT_SCHEMA, indent=2)
+    few_shots = []
+    for shot in LOCAL_INTENT_FEW_SHOTS:
+        few_shots.append(
+            "Example Input:\n"
+            + shot["input"]
+            + "\nExample Output JSON:\n"
+            + json.dumps(shot["output"], ensure_ascii=True)
+        )
+    max_models = int(os.environ.get("AIDE_LOCAL_INTENT_MODEL_TRIES", "3") or "3")
     prompt_parts = [
         SYSTEM_PROMPT,
         "Return exactly one JSON object with this shape:",
         schema_text,
+        "High-signal examples for small local models:",
+        "\n\n".join(few_shots),
         f"User input: {query}",
     ]
     if memory:
@@ -256,13 +325,16 @@ def _ask_local_llm(query, memory=None):
         except Exception:
             pass
 
-    for model in models:
+    best_candidate = None
+    best_score = -1
+
+    for model in models[:max(1, max_models)]:
         payload = {
             "model": model,
             "prompt": "\n\n".join(prompt_parts),
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0},
+            "options": {"temperature": 0, "top_k": 20, "top_p": 0.9},
         }
 
         try:
@@ -280,7 +352,12 @@ def _ask_local_llm(query, memory=None):
                 continue
             parsed = extract_json(response_text)
             if isinstance(parsed, dict):
-                return parsed, None
+                score = _intent_candidate_score(parsed, query)
+                if score > best_score:
+                    best_score = score
+                    best_candidate = parsed
+                if score >= 8:
+                    return parsed, None
         except urllib.error.HTTPError as err:
             detail = ""
             try:
@@ -296,8 +373,37 @@ def _ask_local_llm(query, memory=None):
         except Exception:
             continue
 
+    if isinstance(best_candidate, dict):
+        return best_candidate, None
+
     _LOCAL_LLM_UNAVAILABLE_UNTIL = time.time() + 30.0
     return None, "no_local_model_available"
+
+
+def _intent_candidate_score(parsed, query):
+    score = 0
+    if parsed.get("mode") in MODES:
+        score += 3
+    if parsed.get("application"):
+        score += 1
+    if isinstance(parsed.get("target_properties"), list):
+        score += 1
+    if isinstance(parsed.get("constraints"), dict):
+        score += 1
+    if parsed.get("notes"):
+        score += 1
+
+    q = (query or "").lower()
+    mode = parsed.get("mode")
+    if _looks_like_compare(q) and mode == "compare":
+        score += 3
+    if _looks_like_study(q) and mode == "study":
+        score += 2
+    if _looks_like_modify(q) and mode == "modify":
+        score += 2
+    if _looks_like_geometry(q) and mode == "geometry":
+        score += 2
+    return score
 
 
 def _rule_based_intent(query):
