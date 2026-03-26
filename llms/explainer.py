@@ -5,14 +5,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from llms.client import chat, is_available as llm_available
 
 
-EXPLAIN_SYSTEM = """You are AIDE v4, an expert computational metallurgist.
-Explain alloy analysis results in clear, actionable language.
-1. Explain WHY each domain scored as it did, cite physical mechanisms.
-2. For weak domains, suggest specific compositional changes with amounts.
-3. Highlight cross-domain trade-offs and synergies.
-4. Use metric units and reference specific element roles.
-5. Be concise but thorough, 3-5 paragraphs max.
-6. Start with a 1-sentence executive summary."""
+EXPLAIN_SYSTEM = """You are AIDE metallurgy explainer.
+Output format must be:
+Summary: one sentence
+Strengths: 2-4 bullets
+Weaknesses: 2-4 bullets
+Recommendations: 2-4 bullets with concrete element-level actions
+Rules:
+- No markdown tables.
+- Keep total under 220 words.
+- Use only information provided in the prompt.
+- If data is missing, state uncertainty briefly."""
 
 
 def synthesize_explanation(query, top_candidates, correlation_insights):

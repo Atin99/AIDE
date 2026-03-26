@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AIDE v5 - AI-powered alloy design and analysis engine. Design, compare, and analyze metal alloys with physics-constrained artificial intelligence." />
+  <meta property="og:title" content="AIDE v5 - Alloy Intelligence Design Engine" />
+  <meta property="og:description" content="Physics-constrained AI for metal alloy design and analysis." />
+  <meta property="og:type" content="website" />
+  <title>AIDE v5 - Alloy Intelligence Design Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-bg"></div>
+  <main class="container">
+    <header class="topbar" id="topbar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="8" fill="url(#g1)" />
+            <path d="M8 24L16 8L24 24H8Z" fill="rgba(255,255,255,0.9)" />
+            <defs><linearGradient id="g1" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+          </svg>
+        </div>
+        <div>
+          <h1>AIDE <span class="version">v5</span></h1>
+          <p class="tagline">Alloy Intelligence Design Engine</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="status-pill" id="statusPill">
+          <span class="status-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">Checking</span>
+        </div>
+        <div class="api-box">
+          <label for="apiBase">API Endpoint</label>
+          <input id="apiBase" type="text" value="" placeholder="http://localhost:8000" spellcheck="false" />
+        </div>
+      </div>
+    </header>
+
+    <div class="tabs" id="mainTabs">
+      <button class="tab active" data-tab="engine">Engine Run</button>
+      <button class="tab" data-tab="composition">Composition Editor</button>
+      <button class="tab" data-tab="compare">Multi-Compare</button>
+    </div>
+
+    <section class="tab-panel active" id="tab-engine">
+      <div class="grid-layout">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon engine-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2L2 18H18L10 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="10" cy="12" r="2" fill="currentColor"/></svg>
+            </div>
+            <h2>Natural Language Query</h2>
+          </div>
+          <p class="panel-desc">Describe an alloy application, comparison, or study. The AI pipeline parses intent, selects materials, and runs physics evaluation across 42 domains.</p>
+          <form id="engineForm" class="stack">
+            <textarea id="queryInput" rows="4" placeholder="design a marine corrosion resistant stainless alloy with yield above 650 MPa"></textarea>
+            <button type="submit" id="engineBtn">
+              <span class="btn-text">Run Engine</span>
+              <span class="spinner hidden" id="engineSpinner"></span>
+            </button>
+          </form>
+          <div id="engineSummary" class="summary"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-icon comp-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5" fill="none"/><line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="1"/><line x1="10" y1="3" x2="10" y2="17" stroke="currentColor" stroke-width="1"/></svg>
+            </div>
+            <h2>Pre-fixed Alloys</h2>
+          </div>
+          <p class="panel-desc">Select a known alloy to instantly load its composition and run a full analysis.</p>
+          <div class="stack">
+            <label for="alloySelect">Select Alloy</label>
+            <select id="alloySelect">
+              <option value="">-- Select an alloy --</option>
+            </select>
+            <div id="alloyInfo" class="alloy-info hidden"></div>
+            <button type="button" id="analyzeAlloyBtn" class="btn-primary" disabled>
+              <span class="btn-text">Analyze Selected Alloy</span>
+              <span class="spinner hidden" id="alloySpinner"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-composition">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-icon comp-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          </div>
+          <h2>Composition Editor</h2>
+        </div>
+        <p class="panel-desc">Build a custom composition by adjusting element percentages. Click Analyze to run physics evaluation.</p>
+        <div class="comp-controls">
+          <div class="form-row-sm">
+            <div class="form-group">
+              <label for="edBasis">Basis</label>
+              <select id="edBasis">
+                <option value="wt" selected>Weight %</option>
+                <option value="mol">Molar</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edTemp">Temperature (K)</label>
+              <input id="edTemp" type="number" value="298" min="77" max="7000" />
+            </div>
+            <div class="form-group">
+              <label for="edPreset">Load Preset</label>
+              <select id="edPreset">
+                <option value="">-- none --</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="elementGrid" class="element-grid"></div>
+        <div class="comp-footer">
+          <span id="compTotal" class="comp-total">Total: 0.0%</span>
+          <button type="button" id="normalizeBtn" class="btn-secondary">Normalize to 100%</button>
+          <button type="button" id="analyzeCompBtn" class="btn-primary">
+            <span class="btn-text">Analyze Composition</span>
+            <span class="spinner hidden" id="compEdSpinner"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-compare">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-icon result-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="7" cy="10" r="4" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="13" cy="10" r="4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          </div>
+          <h2>Multi-Alloy Comparison</h2>
+        </div>
+        <p class="panel-desc">Select up to 5 alloys to compare across all physics domains with an interactive radar chart.</p>
+        <div id="compareList" class="compare-list"></div>
+        <div class="compare-controls">
+          <select id="compareAddSelect">
+            <option value="">-- Add alloy --</option>
+          </select>
+          <button type="button" id="compareAddBtn" class="btn-secondary">Add</button>
+          <button type="button" id="compareRunBtn" class="btn-primary" disabled>
+            <span class="btn-text">Compare All</span>
+            <span class="spinner hidden" id="compareSpinner"></span>
+          </button>
+        </div>
+        <div id="compareCharts" class="compare-charts hidden">
+          <canvas id="compareRadar" width="600" height="500"></canvas>
+        </div>
+        <div id="compareTable" class="hidden"></div>
+      </div>
+    </section>
+
+    <section class="panel result-panel" id="resultPanel">
+      <div class="panel-header">
+        <div class="panel-icon result-icon">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 6H16M4 10H12M4 14H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <h2>Results</h2>
+        <div class="result-actions">
+          <button class="tab-btn active" data-view="visual" id="viewVisualBtn">Visual</button>
+          <button class="tab-btn" data-view="json" id="viewJsonBtn">JSON</button>
+          <button class="copy-btn" id="copyBtn" title="Copy JSON">Copy</button>
+        </div>
+      </div>
+      <div id="resultVisual" class="result-visual">
+        <div id="metricsRow" class="metrics-row hidden"></div>
+        <div id="chartsRow" class="charts-row hidden">
+          <div class="chart-container"><canvas id="radarChart" width="450" height="400"></canvas></div>
+          <div class="chart-container"><canvas id="barChart" width="450" height="400"></canvas></div>
+        </div>
+        <div id="domainTable" class="domain-table hidden"></div>
+        <div id="candidatesTable" class="candidates-table hidden"></div>
+      </div>
+      <pre id="resultView" class="result hidden"></pre>
+    </section>
+
+    <footer class="app-footer">
+      <span>AIDE v5 API</span>
+      <span class="sep"></span>
+      <span>42 Physics Domains</span>
+      <span class="sep"></span>
+      <span>Physics-Constrained Alloy Design</span>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

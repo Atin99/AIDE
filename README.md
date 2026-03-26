@@ -1,72 +1,100 @@
 # AIDE v5
 
-AIDE (Alloy Intelligence and Design Engine) is a Streamlit app for alloy analysis and design using multi-domain physics scoring, contextual weighting, and conversational workflows.
+AIDE (Alloy Intelligence and Design Engine) provides alloy analysis and design with multi-domain physics scoring, contextual weighting, and conversational workflows.
 
 ## What It Does
 
 - Evaluates alloys across 42 physics and engineering domains.
 - Computes weighted and raw composite scores with pass/warn/fail checks.
-- Supports application-aware weighting profiles (structural, corrosion, high-temp, nuclear, biomedical, and more).
-- Provides an interactive composition editor plus multi-alloy comparison views.
-- Uses local-first LLM reasoning (Ollama) with optional API provider fallback.
+- Supports application-aware weighting profiles.
+- Supports intent-driven and composition-driven workflows.
+- Uses local-first LLM reasoning with optional provider fallback.
 
 ## Project Structure
 
-- `app.py` - main Streamlit UI
-- `physics/` - domain models and scoring pipeline
-- `core/` - composition, elements, and alloy database utilities
-- `engines/` - analysis mode routing
-- `llms/` - intent parsing and provider clients
-- `ml/` - predictive model utilities
+- `app.py` - Streamlit UI
+- `backend/app` - FastAPI backend wrapper
+- `frontend/` - HTML/CSS/JS client
+- `physics/`, `core/`, `engines/`, `llms/`, `ml/` - existing computation stack
 
-## Quick Start
+## Quick Start (API + Web)
 
-1. Create and activate a virtual environment.
-2. Install dependencies.
-3. Configure environment variables.
-4. Launch Streamlit.
+1. Install dependencies and start API:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-Copy-Item .env.example .env
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+```
+
+2. Run frontend:
+
+```powershell
+cd frontend
+python -m http.server 5173
+```
+
+3. Open `http://localhost:5173` and keep API base as `http://localhost:8000`.
+
+## API Design
+
+Primary endpoint:
+
+- `POST /api/v1/run` (single orchestrator endpoint)
+
+Utility endpoints:
+
+- `GET /health`
+- `GET /api/v1/domains`
+
+Legacy compatibility endpoints:
+
+- `POST /api/v1/intent/classify`
+- `POST /api/v1/engine/run`
+- `POST /api/v1/composition/analyze`
+
+OpenAPI contract: `openapi.yaml`
+
+## Local LLM First Mode
+
+Set these in `.env`:
+
+- `AIDE_USE_LOCAL_LLM=1`
+- `AIDE_LOCAL_FIRST=1`
+- `AIDE_USE_LOCAL_INTENT=1`
+- `AIDE_USE_LLM_INTENT=0`
+- `AIDE_LOCAL_LLM_URL=http://127.0.0.1:11434`
+- `AIDE_LOCAL_LLM_MODELS=phi3:mini`
+- `AIDE_ENABLE_REMOTE_LLM=0`
+- `AIDE_LOCAL_INTENT_MODELS=phi3:mini`
+- `AIDE_LOCAL_INTENT_MODEL_TRIES=3`
+
+This keeps most reasoning local while Python physics/ML scoring remains deterministic.
+
+## Free Deployment
+
+Use the runbook in `deploy/FREE_DEPLOY.md` for a free-tier setup (Hugging Face Spaces backend + Cloudflare Pages frontend).
+
+## Streamlit Mode
+
+```powershell
 streamlit run app.py
 ```
 
 ## Environment Variables
-
-See `.env.example` for a ready template.
 
 - `GEMINI_API_KEY`
 - `DEEPSEEK_API_KEY`
 - `GROQ_API_KEY`
 - `AIDE_USE_LOCAL_LLM`
 - `AIDE_LOCAL_FIRST`
+- `AIDE_ENABLE_REMOTE_LLM`
 - `AIDE_LOCAL_LLM_URL`
 - `AIDE_LOCAL_LLM_MODELS`
 - `AIDE_LOCAL_INTENT_MODELS`
-
-## ML Models
-
-Baseline runtime ML model files are versioned in `ml/models` so predictions work after clone.
-
-- `bulk_modulus.joblib`
-- `formation_energy.joblib`
-- `shear_modulus.joblib`
-- `multitask_nn.pt`
-- `transfer_yield.pt`
-- `train_report.json`
-
-You can retrain/refresh models using `ml/train.py` and related ML scripts.
-
-## Domain Coverage Note
-
-In the Interactive Composition Editor:
-
-- Full 42-domain sweep is the recommended default.
-- Fast subset mode is optional for speed and evaluates only top-weighted domains.
-- For close-call composition comparisons, use the full 42-domain sweep.
+- `AIDE_LOCAL_INTENT_MODEL_TRIES`
+- `AIDE_API_CORS_ORIGINS`
 
 ## Contributing
 
@@ -75,3 +103,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+
+
+
+

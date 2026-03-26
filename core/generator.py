@@ -33,6 +33,35 @@ ALLOY_BASES_WT = {
     "CuZn30":    {"Cu":0.700,"Zn":0.300},
     "AlBronze":  {"Cu":0.900,"Al":0.080,"Fe":0.020},
     "Zircaloy4": {"Zr":0.981,"Sn":0.015,"Fe":0.002,"Cr":0.001,"O":0.001},
+    # new carbon & low-alloy steels
+    "1045":      {"Fe":0.9835,"C":0.0045,"Mn":0.0075,"Si":0.003},
+    "4140":      {"Fe":0.962,"Cr":0.010,"Mo":0.002,"C":0.004,"Mn":0.009,"Si":0.003},
+    "4340":      {"Fe":0.950,"Ni":0.018,"Cr":0.008,"Mo":0.0025,"C":0.004,"Mn":0.007,"Si":0.003},
+    "A36":       {"Fe":0.980,"C":0.0026,"Mn":0.010,"Si":0.004,"Cu":0.002},
+    # new stainless
+    "301SS":     {"Fe":0.720,"Cr":0.170,"Ni":0.070,"Mn":0.020,"Si":0.005},
+    "904L":      {"Fe":0.465,"Cr":0.210,"Ni":0.250,"Mo":0.045,"Cu":0.015,"Mn":0.010},
+    "440C":      {"Fe":0.800,"Cr":0.170,"C":0.011,"Mo":0.005,"Mn":0.010},
+    "15-5PH":    {"Fe":0.762,"Cr":0.150,"Ni":0.045,"Cu":0.035,"Nb":0.003},
+    # new superalloy
+    "Haynes230": {"Ni":0.570,"Cr":0.220,"W":0.140,"Mo":0.020,"Fe":0.015,"Co":0.025,"Al":0.003},
+    "Rene41":    {"Ni":0.550,"Cr":0.190,"Co":0.110,"Mo":0.100,"Al":0.015,"Ti":0.031},
+    "MarM247":   {"Ni":0.595,"Cr":0.084,"Co":0.100,"W":0.100,"Al":0.055,"Ta":0.030,"Hf":0.015},
+    # new titanium
+    "Ti-5-2.5":  {"Ti":0.925,"Al":0.050,"Sn":0.025},
+    "Beta21S":   {"Ti":0.790,"Mo":0.150,"Nb":0.027,"Al":0.030},
+    # new aluminium
+    "A356":      {"Al":0.920,"Si":0.070,"Mg":0.004,"Fe":0.002,"Ti":0.002},
+    "AA6082":    {"Al":0.960,"Si":0.010,"Mg":0.009,"Mn":0.007,"Fe":0.005,"Cr":0.002},
+    # new copper
+    "BeCu":      {"Cu":0.977,"Be":0.019,"Co":0.004},
+    "CuNi70-30": {"Cu":0.700,"Ni":0.300},
+    # new magnesium
+    "AZ91D":     {"Mg":0.900,"Al":0.090,"Zn":0.007,"Mn":0.003},
+    "ZK60A":     {"Mg":0.940,"Zn":0.055,"Zr":0.005},
+    # new tool steels
+    "A2":        {"Fe":0.912,"Cr":0.052,"Mo":0.011,"C":0.010,"Mn":0.008,"V":0.003},
+    "S7":        {"Fe":0.930,"Cr":0.033,"Mo":0.014,"C":0.005,"Mn":0.007,"Si":0.010,"V":0.003},
 }
 
 APP_ELEMENTS = {
@@ -47,6 +76,9 @@ APP_ELEMENTS = {
     "biomedical":   ["Ti","Nb","Ta","Zr","Mo","Co","Cr","Fe"],
     "carbon_steel": ["Fe","C","Mn","Si","S","P"],
     "cu_alloy":     ["Cu","Zn","Al","Sn","Ni","Mn","Fe","Si"],
+    "mg_alloy":     ["Mg","Al","Zn","Mn","Zr","Y","Nd","Ce","Sn"],
+    "low_alloy":    ["Fe","C","Mn","Si","Cr","Mo","Ni","V","Nb","Cu"],
+    "tool_steel":   ["Fe","C","Cr","Mo","V","W","Mn","Si","Co","Nb"],
 }
 
 OPEN_ALLOY_POOL = sorted(
@@ -143,6 +175,12 @@ def generate(query: str, n: int = 300, seed: int = 42,
         app = "refractory"
     elif any(w in q for w in ["biomedical", "implant", "surgical", "bone", "hip", "dental"]):
         app = "biomedical"
+    elif any(w in q for w in ["magnesium", "mg alloy", "az31", "az91", "lightweight mg"]):
+        app = "mg_alloy"
+    elif any(w in q for w in ["4140", "4340", "low alloy", "engineering steel", "alloy steel"]):
+        app = "low_alloy"
+    elif any(w in q for w in ["tool steel", "die steel", "h13", "m2", "d2", "hss"]):
+        app = "tool_steel"
     elif any(w in q for w in ["plain carbon steel", "carbon steel", "mild steel"]):
         app = "carbon_steel"
     else:
@@ -157,6 +195,9 @@ def generate(query: str, n: int = 300, seed: int = 42,
         "nuclear": {"Zr": (0.80, 0.99)},
         "biomedical": {"Ti": (0.55, 0.90)},
         "carbon_steel": {"Fe": (0.95, 0.99), "C": (0.001, 0.01)},
+        "mg_alloy": {"Mg": (0.85, 0.97)},
+        "low_alloy": {"Fe": (0.90, 0.97)},
+        "tool_steel": {"Fe": (0.75, 0.95)},
         "open_alloy": {},
         "general_structural": {"Fe": (0.50, 0.85)},
         "structural": {"Fe": (0.50, 0.85)},
@@ -329,4 +370,9 @@ def _is_relevant(base_key, app):
     if app == "refractory":  return WT.get("W", 0) + WT.get("Mo", 0) + WT.get("Nb", 0) > 0.2
     if app == "biomedical":  return WT.get("Ti", 0) > 0.5
     if app == "carbon_steel":return WT.get("Fe", 0) > 0.90
+    if app == "mg_alloy":    return WT.get("Mg", 0) > 0.8
+    if app == "low_alloy":   return WT.get("Fe", 0) > 0.85 and WT.get("Cr", 0) < 0.05
+    if app == "tool_steel":  return WT.get("Fe", 0) > 0.7 and WT.get("C", 0) > 0.003
+    if app == "cu_alloy":    return WT.get("Cu", 0) > 0.5
     return WT.get("Fe", 0) > 0.3
+
