@@ -4,6 +4,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Optional
 
+from core.alloy_db import iter_by_category
+from core.alloy_db import lookup_alloy
+from core.alloy_db import search_alloys
+
 
 class DataHub:
     
@@ -13,16 +17,13 @@ class DataHub:
     
     
     def get_alloy(self, name: str) -> Optional[dict]:
-        from core.alloy_db import lookup_alloy
         return lookup_alloy(name)
     
     def search_alloys(self, query: str) -> list:
-        from core.alloy_db import search_alloys
         return search_alloys(query)
     
     def list_all_alloys(self) -> list:
-        from core.alloy_db import ALLOY_DATABASE
-        return list(ALLOY_DATABASE.keys())
+        return [entry["key"] for entry in iter_by_category()]
     
     
     def get_element(self, symbol: str):

@@ -27,13 +27,13 @@ from llms.intent_parser import classify_intent
 from llms.conversation_memory import ConversationMemory
 from core.data_hub import get_hub
 
-st.set_page_config(page_title="AIDE v5.0", page_icon="🔬", layout="wide")
+st.set_page_config(page_title="AIDE v5.0", layout="wide")
 
 st.markdown("""
 <style>
     .block-container { padding-top: 1rem; max-width: 1400px; }
     .stChatMessage { font-size: 0.95rem; }
-    h1 { font-size: 1.6rem !important; }
+    h1 { font-size: 1.6rem !important; color: #e8ecf2 !important; }
     h2 { font-size: 1.3rem !important; }
     h3 { font-size: 1.1rem !important; }
     .stMetric label { font-size: 0.85rem; }
@@ -42,11 +42,12 @@ st.markdown("""
     .thinking-step {
         padding: 0.4rem 0.8rem;
         margin: 0.2rem 0;
-        border-left: 3px solid #4A90D9;
-        background: #f8f9fa;
+        border-left: 3px solid #7ec4cf;
+        background: rgba(34,38,46,0.8);
         font-size: 0.85rem;
+        color: #e8ecf2;
     }
-    .step-action { color: #4A90D9; font-weight: 600; }
+    .step-action { color: #7ec4cf; font-weight: 600; }
     .agent-tag {
         display: inline-block;
         padding: 0 0.4rem;
@@ -55,9 +56,21 @@ st.markdown("""
         font-weight: 600;
         margin-right: 0.3rem;
     }
-    .agent-compose { background: #e3f2fd; color: #1565c0; }
-    .agent-evaluate { background: #e8f5e9; color: #2e7d32; }
-    .agent-analyze { background: #fff3e0; color: #e65100; }
+    .agent-compose { background: rgba(126,196,207,0.15); color: #7ec4cf; }
+    .agent-evaluate { background: rgba(93,217,168,0.15); color: #5dd9a8; }
+    .agent-analyze { background: rgba(232,197,90,0.15); color: #e8c55a; }
+    .badge-catalog {
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+        background: rgba(93,217,168,0.15); color: #5dd9a8;
+        border: 1px solid rgba(93,217,168,0.25);
+    }
+    .badge-generated {
+        display: inline-block; padding: 2px 8px; border-radius: 4px;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+        background: rgba(126,196,207,0.12); color: #7ec4cf;
+        border: 1px solid rgba(126,196,207,0.2);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -258,7 +271,7 @@ def make_score_bar_chart(domain_results, title="Domain Scores"):
 def show_thinking_log(steps):
     if not steps:
         return
-    with st.expander(" Thinking Log", expanded=True):
+    with st.expander("Thinking Log", expanded=True):
         for s in steps:
             step = s if isinstance(s, dict) else s.__dict__
             stage = step.get("stage", "")
@@ -291,7 +304,7 @@ def show_thinking_log(steps):
 def show_domain_checks(checks_list):
     for ch in checks_list:
         status_map = {
-            "PASS": "🟢", "FAIL": "", "WARN": "🟡", "INFO": "ℹ",
+            "PASS": "[OK]", "FAIL": "[X]", "WARN": "[!]", "INFO": "[i]",
         }
         if hasattr(ch, "status"):
             status, name = ch.status, ch.name
@@ -435,7 +448,7 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
         c2.metric("Candidates", result.get("n_candidates", 0))
         c3.metric("Iterations", result.get("iterations", 1))
 
-        st.subheader("Top Candidates")
+        st.subheader("Top Candidates")  # emoji-free
         rows = []
         for rank, (comp, r) in enumerate(top[:10], 1):
             rows.append({
@@ -462,7 +475,7 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
                     rank=1)
                 if explanation:
                     st.markdown("---")
-                    st.markdown("** AI Analysis (Top Candidate):**")
+                    st.markdown("**AI Analysis (Top Candidate):**")
                     st.markdown(explanation)
             except Exception:
                 pass
@@ -489,8 +502,8 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
                 st.caption(f"Est. raw material cost: ${cost:.2f}/kg")
 
         txt = _generate_txt(query, intent, result, elapsed)
-        st.download_button(" Download Report (TXT)", data=txt,
-                           file_name="AIDE_v3_report.txt", mime="text/plain",
+        st.download_button("Download Report (TXT)", data=txt,
+                           file_name="AIDE_v5_report.txt", mime="text/plain",
                            key=f"dl_design_{time.time()}")
 
         return f"Found {len(top)} candidates. Best score: {result.get('best_score', 0):.1f}/100."
@@ -519,8 +532,8 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
                     st.markdown(f"`{fmt_comp(mod['composition'])}`")
 
         txt = _generate_txt(query, intent, result, elapsed)
-        st.download_button(" Download Report (TXT)", data=txt,
-                           file_name="AIDE_v3_modify_report.txt", mime="text/plain",
+        st.download_button("Download Report (TXT)", data=txt,
+                           file_name="AIDE_v5_modify_report.txt", mime="text/plain",
                            key=f"dl_modify_{time.time()}")
 
         return f"Analyzed {result.get('alloy_name', 'alloy')}. {len(mods)} suggestions."
@@ -533,7 +546,7 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
 
         explanation = result.get("explanation", "")
         if explanation:
-            st.markdown("** AI Explanation:**")
+            st.markdown("**AI Explanation:**")
             st.markdown(explanation)
 
         if result.get("analysis"):
@@ -551,8 +564,8 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
                 show_domain_checks(sec.get("checks", []))
 
         txt = _generate_txt(query, intent, result, elapsed)
-        st.download_button(" Download Report (TXT)", data=txt,
-                           file_name="AIDE_v3_study_report.txt", mime="text/plain",
+        st.download_button("Download Report (TXT)", data=txt,
+                           file_name="AIDE_v5_study_report.txt", mime="text/plain",
                            key=f"dl_study_{time.time()}")
 
         return f"Study of {result.get('topic', 'topic')}."
@@ -572,7 +585,7 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
             from llms.explainer import explain_comparison
             comp_explanation = explain_comparison(a1["name"], a2["name"], result)
             if comp_explanation:
-                st.markdown("** AI Analysis:**")
+                st.markdown("**AI Analysis:**")
                 st.markdown(comp_explanation)
         except Exception:
             pass
@@ -610,8 +623,8 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
                     use_container_width=True, hide_index=True)
 
         txt = _generate_txt(query, intent, result, elapsed)
-        st.download_button(" Download Report (TXT)", data=txt,
-                           file_name="AIDE_v3_compare_report.txt", mime="text/plain",
+        st.download_button("Download Report (TXT)", data=txt,
+                           file_name="AIDE_v5_compare_report.txt", mime="text/plain",
                            key=f"dl_compare_{time.time()}")
 
         return f"Compared {a1['name']} vs {a2['name']}. Winner: {result['overall_winner']}."
@@ -661,8 +674,8 @@ def _display_result(result, mode, intent, query, show_detail, use_ml, elapsed):
 
 
 with st.sidebar:
-    st.header(" AIDE v5.0")
-    st.caption("Agentic Alloy Design")
+    st.header("AIDE v5.0")
+    st.caption("Alloy Intelligence Design Engine")
 
     st.subheader("Operating Conditions")
     T_op = st.slider("Temperature (K)", 77, 4000, 298, step=10)
@@ -696,18 +709,18 @@ with st.sidebar:
     show_detail = st.checkbox("Show detailed checks", value=False)
 
     st.markdown("---")
-    if st.button(" Clear Chat"):
+    if st.button("Clear Chat"):
         st.session_state.memory.clear()
         st.session_state.chat_messages = []
         st.rerun()
 
     st.markdown("---")
-    st.caption("Use local Ollama models or set API keys (Gemini, DeepSeek, Groq) in .env for full reasoning")
+    st.caption("Set GEMINI_API_KEY or GROQ_API_KEY in .env for full LLM reasoning")
     from llms.client import is_available
     if is_available():
-        st.success(" LLM Connected", icon="✅")
+        st.success("Remote LLM Connected")
     else:
-        st.warning("No local/API LLM available — template mode", icon="✅")
+        st.warning("No LLM API key configured -- template mode")
 
 
 user_constraints = {}
@@ -719,11 +732,11 @@ if min_PREN > 0:
     user_constraints["min_PREN"] = min_PREN
 
 
-st.title("AIDE v5 — Alloy Intelligence & Design Engine")
+st.title("AIDE v5 -- Alloy Intelligence & Design Engine")
 st.caption("42 Physics Domains | Multi-Agent Reasoning | Conversational AI")
 
 tab_chat, tab_editor, tab_compare = st.tabs(
-    [" Chat & Design", " Composition Editor", " Multi-Compare"])
+    ["Chat & Design", "Composition Editor", "Multi-Compare"])
 
 
 with tab_chat:
@@ -1004,7 +1017,7 @@ with tab_editor:
                     show_domain_checks(dr.checks)
                     
                     btn_key = f"explain_{dr.domain_id}"
-                    if st.button(f" AI Explain {dr.domain_name}", key=btn_key):
+                    if st.button(f"AI Explain {dr.domain_name}", key=btn_key):
                         with st.spinner(f"Analyzing {dr.domain_name}..."):
                             from llms.explainer import explain_single_domain
                             checks_str = []
@@ -1021,7 +1034,7 @@ with tab_editor:
                                 dr.domain_name, dr.score(), "\n".join(checks_str), fmt_comp(comp_wt)
                             )
                             st.markdown("---")
-                            st.markdown(f"** {dr.domain_name} Analysis:**")
+                            st.markdown(f"**{dr.domain_name} Analysis:**")
                             st.markdown(explanation)
 
         try:
@@ -1029,7 +1042,7 @@ with tab_editor:
             explanation = explain_results(comp_mol, result["domain_results"])
             if explanation:
                 st.markdown("---")
-                st.markdown("** AI Analysis:**")
+                st.markdown("**AI Analysis:**")
                 st.markdown(explanation)
         except Exception:
             pass
@@ -1054,7 +1067,7 @@ with tab_editor:
                 if ch.citation:
                     txt_lines.append(f"    Ref: {ch.citation}")
 
-        st.download_button(" Download Report (TXT)", "\n".join(txt_lines),
+        st.download_button("Download Report (TXT)", "\n".join(txt_lines),
                            file_name="AIDE_composition_report.txt",
                            mime="text/plain", key="editor_dl")
 
@@ -1063,7 +1076,7 @@ with tab_editor:
 
 
 with tab_compare:
-    st.subheader(" Multi-Alloy Comparison")
+    st.subheader("Multi-Alloy Comparison")
     st.caption("Select 2–5 alloys from the database and compare across all domains")
 
     alloy_options = list(ALLOY_DATABASE.keys())
@@ -1127,7 +1140,7 @@ with tab_compare:
                         alloy_data[0][0], alloy_data[1][0]),
                         use_container_width=True)
 
-                with st.expander(" Full Domain Scores"):
+                with st.expander("Full Domain Scores"):
                     st.dataframe(pd.DataFrame(score_rows),
                                 use_container_width=True, hide_index=True)
 

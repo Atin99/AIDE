@@ -55,6 +55,8 @@ class DesignEngine:
                 top.append((cand.composition, cand.physics_result))
         return {
             "mode": "design", "top": top, "n_candidates": len(result.candidates),
+            "n_generated_raw": result.generation_stats.get("raw_generated", 0),
+            "n_physics_evaluated": result.generation_stats.get("physics_evaluated", len(result.candidates)),
             "n_domains": top[0][1].get("n_domains", 0) if top else 0,
             "thinking_steps": [{"step": s.step_num, "thought": s.thought,
                                 "action": s.stage, "observation": s.observation,
@@ -63,11 +65,14 @@ class DesignEngine:
             "best_score": result.best_score, "total_time": result.total_time,
             "explanation": result.explanation,
             "correlation_insights": result.correlation_insights,
+            "generation_stats": result.generation_stats,
             "candidates_detail": [{"composition": c.composition,
                                    "composition_wt": c.composition_wt,
                                    "rationale": c.rationale, "score": c.score,
                                    "ml_predictions": c.ml_predictions,
-                                   "weak_domains": c.weak_domains}
+                                   "weak_domains": c.weak_domains,
+                                   "result_type": c.result_type,
+                                   "provenance": c.provenance}
                                   for c in result.candidates[:top_n]]}
 
 
@@ -312,14 +317,41 @@ class ChatEngine:
         from llms.client import is_available
         if is_available():
             try:
+                from engines.researcher import ApplicationResearcher
                 from llms.client import chat as llm_chat_raw
+                research = ApplicationResearcher()._heuristic_research(query, intent=intent)
+                app = intent.get("application") or "general_structural"
+                props = ", ".join(intent.get("target_properties") or []) or "none"
+                excludes = ", ".join(intent.get("exclude_elements") or []) or "none"
+                constraints = intent.get("constraints") or {}
                 response = llm_chat_raw([
-                    {"role": "system", "content": "You are AIDE v4, an expert metallurgy assistant."},
-                    {"role": "user", "content": query}], max_tokens=500)
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are AIDE v5, a rigorous metallurgy assistant. "
+                            "Think in terms of application, mechanisms, constraints, tradeoffs, and validation. "
+                            "Do not give one-line answers. Explain why, give alternatives, and state uncertainty when the query is vague. "
+                            "When the user uses informal application terms like fuse alloy or chip alloy, translate them into likely metallurgy intents before answering."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"User query: {query}\n"
+                            f"Structured application: {app}\n"
+                            f"Target properties: {props}\n"
+                            f"Excluded elements: {excludes}\n"
+                            f"Constraints: {constraints}\n"
+                            f"Heuristic base elements: {research.base_elements}\n"
+                            f"Heuristic mechanisms: {research.mandatory_mechanisms}\n"
+                            "Answer with short sections: Interpretation, Reasoning, Recommended direction, Risks."
+                        ),
+                    },
+                ], max_tokens=1200, temperature=0.45, retries=2, timeout=25)
                 return {"mode": "chat", "response": response or "Could not process that.", "query": query}
             except Exception:
                 pass
-        return {"mode": "chat", "response": "I'm AIDE v4. Ask me to design, study, compare, or modify alloys.",
+        return {"mode": "chat", "response": "I can interpret the application, translate vague alloy terms into metallurgy targets, then design, compare, study, or modify alloys with explicit tradeoffs.",
                 "query": query}
 
 

@@ -61,6 +61,18 @@ class UnifiedRunRequest(BaseModel):
     overrides: RunOverrides = Field(default_factory=RunOverrides)
 
 
+class CandidateDetail(BaseModel):
+    """Structured candidate with explicit real-vs-generated tagging."""
+    composition: Dict[str, float] = Field(default_factory=dict)
+    composition_wt: Dict[str, float] = Field(default_factory=dict)
+    rationale: str = ""
+    score: float = 0.0
+    ml_predictions: Dict[str, Any] = Field(default_factory=dict)
+    weak_domains: List[Any] = Field(default_factory=list)
+    result_type: Literal["catalog", "generated"] = "generated"
+    provenance: Optional[Dict[str, Any]] = None
+
+
 class ApiResponse(BaseModel):
     ok: bool = True
     data: Dict[str, Any]

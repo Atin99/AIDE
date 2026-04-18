@@ -3,16 +3,14 @@ import logging
 import os
 import re
 import sys
-import time
-import urllib.error
-import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.alloy_db import lookup_alloy
 from core.elements import available as available_elements
 from core.query_parser import parse_query
-from llms.client import chat_json, extract_json, is_available as llm_available
+from llms.client import ProviderUnavailableError
+from llms.client import chat_json, is_available as llm_available
 
 logger = logging.getLogger("AIDE.intent")
 
@@ -58,66 +56,9 @@ Rules:
 9. Notes must contain the original user intent in short form.
 10. Unknown fields are not allowed."""
 
-LOCAL_INTENT_FEW_SHOTS = [
-    {
-        "input": "design a marine stainless alloy with yield above 650 MPa at 80 C and low cost",
-        "output": {
-            "mode": "design",
-            "alloy_name": None,
-            "alloy_name_2": None,
-            "composition": None,
-            "composition_2": None,
-            "target_properties": ["corrosion_resistance", "high_strength"],
-            "problem": None,
-            "domains_focus": [],
-            "study_topic": None,
-            "geometry": None,
-            "loading": None,
-            "temperature_K": 353.15,
-            "environment": "mumbai_coastal",
-            "n_elements": None,
-            "n_results": None,
-            "constraints": {"min_yield_MPa": 650, "cost_level": "low"},
-            "base_element": None,
-            "only_elements": None,
-            "must_include": ["Fe", "Cr", "Mo"],
-            "exclude_elements": ["Re", "Ta", "Hf"],
-            "application": "stainless",
-            "chat_response": None,
-            "notes": "marine stainless design with high yield and low cost",
-        },
-    },
-    {
-        "input": "compare Inconel 718 vs SS316 for chloride service",
-        "output": {
-            "mode": "compare",
-            "alloy_name": "Inconel 718",
-            "alloy_name_2": "SS316",
-            "composition": None,
-            "composition_2": None,
-            "target_properties": ["corrosion_resistance"],
-            "problem": None,
-            "domains_focus": [],
-            "study_topic": None,
-            "geometry": None,
-            "loading": None,
-            "temperature_K": None,
-            "environment": "mumbai_coastal",
-            "n_elements": None,
-            "n_results": None,
-            "constraints": {},
-            "base_element": None,
-            "only_elements": None,
-            "must_include": [],
-            "exclude_elements": [],
-            "application": "stainless",
-            "chat_response": None,
-            "notes": "compare Inconel 718 and SS316 in chloride service",
-        },
-    },
-]
-
 APPLICATION_DEFAULT_PROPERTIES = {
+    "fusible_alloy": ["low_melting_point"],
+    "electronic_alloy": ["conductivity", "thermal_stability"],
     "stainless": ["corrosion_resistance", "oxidation_resistance"],
     "structural": ["high_strength", "fatigue_resistance"],
     "superalloy": ["high_temperature_strength", "creep_resistance", "oxidation_resistance"],
@@ -128,12 +69,13 @@ APPLICATION_DEFAULT_PROPERTIES = {
     "refractory": ["high_temperature_strength", "creep_resistance"],
     "hea": ["high_strength", "thermal_stability"],
     "carbon_steel": ["high_strength", "weldability"],
-    "cu_alloy": ["conductivity", "corrosion_resistance"],
+    "cu_alloy": ["conductivity"],
     "open_alloy": ["high_strength"],
     "general_structural": ["high_strength"],
 }
 
 PROPERTY_KEYWORDS = {
+    "low_melting_point": ["low melting", "low-melting", "fusible", "solder", "reflow", "liquid metal", "thermal fuse", "melt below"],
     "corrosion_resistance": ["corrosion", "rust", "pitting", "chloride", "seawater", "marine"],
     "oxidation_resistance": ["oxidation", "scale", "hot corrosion"],
     "creep_resistance": ["creep", "stress rupture"],
@@ -144,7 +86,7 @@ PROPERTY_KEYWORDS = {
     "wear_resistance": ["wear", "abrasion", "erosion", "galling", "tribology"],
     "weldability": ["weld", "weldability"],
     "low_density": ["lightweight", "low density", "mass critical", "weight critical"],
-    "conductivity": ["conductivity", "electrical", "wire", "busbar", "conductive"],
+    "conductivity": ["conductivity", "electrical", "wire", "busbar", "conductive", "chip", "interconnect", "bond wire", "leadframe", "packaging"],
     "biocompatibility": ["biocompatible", "implant", "medical", "surgical", "dental"],
     "radiation_resistance": ["radiation", "reactor", "nuclear", "dpa"],
     "thermal_stability": ["phase stability", "thermal stability", "stability"],
@@ -156,6 +98,8 @@ ELEMENT_ALIAS = {
     "Cr": ["cr", "chromium"],
     "Mo": ["mo", "molybdenum"],
     "Cu": ["cu", "copper"],
+    "Ag": ["ag", "silver"],
+    "Au": ["au", "gold"],
     "Al": ["al", "aluminum", "aluminium"],
     "Ti": ["ti", "titanium"],
     "V": ["v", "vanadium"],
@@ -163,11 +107,18 @@ ELEMENT_ALIAS = {
     "Re": ["re", "rhenium"],
     "Ta": ["ta", "tantalum"],
     "Hf": ["hf", "hafnium"],
+    "Pb": ["pb", "lead"],
+    "Cd": ["cd", "cadmium"],
+    "Sn": ["sn", "tin"],
+    "Bi": ["bi", "bismuth"],
+    "In": ["in", "indium"],
+    "Ga": ["ga", "gallium"],
+    "Ge": ["ge", "germanium"],
+    "Si": ["si", "silicon"],
     "C": ["carbon", "c"],
 }
 
 ELEMENT_SET = set(available_elements())
-_LOCAL_LLM_UNAVAILABLE_UNTIL = 0.0
 
 
 def classify_intent(query, memory=None):
@@ -189,25 +140,22 @@ def classify_intent(query, memory=None):
     source = "rule_based"
     debug.append({"stage": "rule_parse", "status": "ok"})
 
-    if _use_local_llm_intent():
-        local_result, local_error = _ask_local_llm(query, memory=memory)
-        if isinstance(local_result, dict):
-            best = _merge_intents(fallback, local_result, query)
-            source = "local_llm+rule"
-            debug.append({"stage": "local_llm", "status": "ok"})
-        else:
-            debug.append({"stage": "local_llm", "status": "failed", "reason": local_error or "unavailable"})
-
-    if source == "rule_based" and _use_remote_llm_intent() and llm_available():
+    if llm_available():
         try:
             remote = _ask_llm(query, memory)
             if isinstance(remote, dict):
                 best = _merge_intents(fallback, remote, query)
                 source = "remote_llm+rule"
                 debug.append({"stage": "remote_llm", "status": "ok"})
+            else:
+                debug.append({"stage": "remote_llm", "status": "empty"})
+        except ProviderUnavailableError as err:
+            debug.append({"stage": "remote_llm", "status": "unavailable", "reason": str(err)})
         except Exception as err:
             logger.warning("Remote intent parse failed: %s", err)
             debug.append({"stage": "remote_llm", "status": "failed", "reason": str(err)})
+    else:
+        debug.append({"stage": "remote_llm", "status": "disabled", "reason": "no_remote_api_key"})
 
     clean = _validate_and_enrich(query, best)
     clean = _enforce_structured_core(clean, query)
@@ -238,172 +186,6 @@ def _merge_intents(rule_intent, llm_intent, query):
             merged[key] = value
     merged.setdefault("notes", query)
     return merged
-
-
-def _use_local_llm_intent():
-    return os.environ.get("AIDE_USE_LOCAL_INTENT", "1").strip().lower() not in {
-        "0", "false", "no", "off"
-    }
-
-
-def _use_remote_llm_intent():
-    return os.environ.get("AIDE_USE_LLM_INTENT", "0").strip().lower() in {
-        "1", "true", "yes", "on"
-    }
-
-
-def _intent_local_models():
-    forced = os.environ.get("AIDE_LOCAL_INTENT_MODEL", "").strip()
-    listed = os.environ.get("AIDE_LOCAL_INTENT_MODELS", "").strip()
-    shared = os.environ.get("AIDE_LOCAL_LLM_MODELS", "").strip()
-
-    models = []
-    if forced:
-        models.append(forced)
-
-    for src in (listed, shared):
-        if not src:
-            continue
-        for token in src.split(","):
-            model = token.strip()
-            if model and model not in models:
-                models.append(model)
-
-    defaults = [
-        "phi3:mini",
-        "qwen2:1.5b",
-        "qwen2.5:1.5b",
-        "qwen2.5:3b",
-        "llama3.2:3b",
-        "mistral:7b-instruct",
-    ]
-    for model in defaults:
-        if model not in models:
-            models.append(model)
-    return models
-
-
-def _ask_local_llm(query, memory=None):
-    global _LOCAL_LLM_UNAVAILABLE_UNTIL
-    if time.time() < _LOCAL_LLM_UNAVAILABLE_UNTIL:
-        return None, "recently_unavailable"
-
-    models = _intent_local_models()
-    endpoint = os.environ.get("AIDE_LOCAL_LLM_URL", "http://127.0.0.1:11434/api/generate")
-    timeout = float(os.environ.get("AIDE_LOCAL_LLM_TIMEOUT", "1.2"))
-
-    schema_text = json.dumps(INTENT_SCHEMA, indent=2)
-    few_shots = []
-    for shot in LOCAL_INTENT_FEW_SHOTS:
-        few_shots.append(
-            "Example Input:\n"
-            + shot["input"]
-            + "\nExample Output JSON:\n"
-            + json.dumps(shot["output"], ensure_ascii=True)
-        )
-    max_models = int(os.environ.get("AIDE_LOCAL_INTENT_MODEL_TRIES", "3") or "3")
-    prompt_parts = [
-        SYSTEM_PROMPT,
-        "Return exactly one JSON object with this shape:",
-        schema_text,
-        "High-signal examples for small local models:",
-        "\n\n".join(few_shots),
-        f"User input: {query}",
-    ]
-    if memory:
-        try:
-            context = memory.get_context_for_llm()
-            if context:
-                compact = []
-                for msg in context[-4:]:
-                    role = msg.get("role", "user")
-                    content = (msg.get("content", "") or "").strip()
-                    if content:
-                        compact.append(f"{role}: {content[:240]}")
-                if compact:
-                    prompt_parts.append("Recent context:\n" + "\n".join(compact))
-        except Exception:
-            pass
-
-    best_candidate = None
-    best_score = -1
-
-    for model in models[:max(1, max_models)]:
-        payload = {
-            "model": model,
-            "prompt": "\n\n".join(prompt_parts),
-            "stream": False,
-            "format": "json",
-            "options": {"temperature": 0, "top_k": 20, "top_p": 0.9},
-        }
-
-        try:
-            req = urllib.request.Request(
-                endpoint,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
-            obj = json.loads(body)
-            response_text = (obj.get("response") or "").strip()
-            if not response_text:
-                continue
-            parsed = extract_json(response_text)
-            if isinstance(parsed, dict):
-                score = _intent_candidate_score(parsed, query)
-                if score > best_score:
-                    best_score = score
-                    best_candidate = parsed
-                if score >= 8:
-                    return parsed, None
-        except urllib.error.HTTPError as err:
-            detail = ""
-            try:
-                detail = err.read().decode("utf-8", errors="replace")
-            except Exception:
-                detail = str(err)
-            if "not found" in detail.lower() and "model" in detail.lower():
-                continue
-            return None, f"http_error: {err.code}"
-        except urllib.error.URLError as err:
-            _LOCAL_LLM_UNAVAILABLE_UNTIL = time.time() + 120.0
-            return None, f"network_error: {err}"
-        except Exception:
-            continue
-
-    if isinstance(best_candidate, dict):
-        return best_candidate, None
-
-    _LOCAL_LLM_UNAVAILABLE_UNTIL = time.time() + 30.0
-    return None, "no_local_model_available"
-
-
-def _intent_candidate_score(parsed, query):
-    score = 0
-    if parsed.get("mode") in MODES:
-        score += 3
-    if parsed.get("application"):
-        score += 1
-    if isinstance(parsed.get("target_properties"), list):
-        score += 1
-    if isinstance(parsed.get("constraints"), dict):
-        score += 1
-    if parsed.get("notes"):
-        score += 1
-
-    q = (query or "").lower()
-    mode = parsed.get("mode")
-    if _looks_like_compare(q) and mode == "compare":
-        score += 3
-    if _looks_like_study(q) and mode == "study":
-        score += 2
-    if _looks_like_modify(q) and mode == "modify":
-        score += 2
-    if _looks_like_geometry(q) and mode == "geometry":
-        score += 2
-    return score
 
 
 def _rule_based_intent(query):
@@ -527,6 +309,15 @@ def _extract_target_properties(q):
     for prop, markers in PROPERTY_KEYWORDS.items():
         if any(marker in q for marker in markers):
             props.append(prop)
+    fuse_wire_markers = ["fuse wire", "fusible wire", "fuse alloy", "fusible alloy", "thermal fuse"]
+    explicit_electrical_markers = [
+        "high conductivity", "electrical conductivity", "low resistance", "resistive heating",
+        "current rating", "ampere", "amperage", "circuit protection", "overcurrent",
+    ]
+    if any(marker in q for marker in fuse_wire_markers) and not any(marker in q for marker in explicit_electrical_markers):
+        props = [prop for prop in props if prop != "conductivity"]
+        if "low_melting_point" not in props:
+            props.append("low_melting_point")
     if re.search(r"\b(\d{3,4})\s*c\b", q):
         if "high_temperature_strength" not in props:
             props.append("high_temperature_strength")
@@ -540,6 +331,10 @@ def _extract_application(q, props=None):
 
     if any(k in q for k in ["any alloy", "any composition", "unrestricted composition", "any elements", "no element restriction"]):
         return "open_alloy"
+    if any(k in q for k in ["fuse alloy", "fuse wire", "fusible", "fusible wire", "low melting", "low-melting", "solder", "solder alloy", "thermal fuse", "fusible link", "braze filler", "liquid metal"]):
+        return "fusible_alloy"
+    if any(k in q for k in ["chip alloy", "chip package", "semiconductor", "interconnect", "bond wire", "wire bond", "solder bump", "leadframe", "microelectronics", "electronic packaging"]):
+        return "electronic_alloy"
     if any(k in q for k in ["stainless", "duplex", "pitting", "chloride"]):
         return "stainless"
     if any(k in q for k in ["marine", "offshore", "seawater"]) and "steel" in q:
@@ -572,8 +367,10 @@ def _extract_application(q, props=None):
         return "al_alloy"
     if "biocompatibility" in props:
         return "biomedical"
+    if "low_melting_point" in props:
+        return "fusible_alloy"
     if "conductivity" in props:
-        return "cu_alloy"
+        return "electronic_alloy"
     if "high_temperature_strength" in props or "creep_resistance" in props:
         return "superalloy"
 
@@ -604,6 +401,19 @@ def _extract_constraints(q, parsed):
         constraints["no_ni"] = True
     if re.search(r"\bno\s+co\b|\bcobalt[-\s]?free\b|\bco[-\s]?free\b|\bwithout\s+cobalt\b", q):
         constraints["no_co"] = True
+    if re.search(r"\blead[-\s]?free\b|\bpb[-\s]?free\b|\bwithout\s+lead\b", q):
+        constraints["no_pb"] = True
+    if re.search(r"\bcadmium[-\s]?free\b|\bcd[-\s]?free\b|\bwithout\s+cadmium\b", q):
+        constraints["no_cd"] = True
+    if re.search(r"\brohs\b", q):
+        constraints["rohs_compliant"] = True
+
+    m_liquidus_c = re.search(r"(?:liquidus|melting(?:\s+point)?)\s*(?:<=|<|under|below|max(?:imum)?)\s*(\d+(?:\.\d+)?)\s*(?:deg(?:ree)?s?)?\s*c\b", q)
+    if m_liquidus_c:
+        constraints["max_melting_point_K"] = round(float(m_liquidus_c.group(1)) + 273.15, 2)
+    m_liquidus_k = re.search(r"(?:liquidus|melting(?:\s+point)?)\s*(?:<=|<|under|below|max(?:imum)?)\s*(\d+(?:\.\d+)?)\s*k\b", q)
+    if m_liquidus_k:
+        constraints["max_melting_point_K"] = round(float(m_liquidus_k.group(1)), 2)
 
     return constraints
 
@@ -656,6 +466,69 @@ def _extract_element_exclusions_from_text(result, q):
                 if symbol not in result["exclude_elements"]:
                     result["exclude_elements"].append(symbol)
                 break
+
+
+def _apply_family_guidance(result, q):
+    family = None
+    if "aluminum bronze" in q or "aluminium bronze" in q:
+        family = "aluminum_bronze"
+    elif "phosphor bronze" in q:
+        family = "phosphor_bronze"
+    elif "silicon bronze" in q:
+        family = "silicon_bronze"
+    elif "bronze" in q:
+        family = "bronze"
+    elif "brass" in q:
+        family = "brass"
+
+    if not family:
+        return
+
+    result["application"] = "cu_alloy"
+    result["constraints"]["alloy_family"] = family
+
+    def add_must(symbol):
+        if symbol not in result["exclude_elements"] and symbol not in result["must_include"]:
+            result["must_include"].append(symbol)
+
+    def add_prop(prop):
+        if prop not in result["target_properties"]:
+            result["target_properties"].append(prop)
+
+    conductivity_markers = PROPERTY_KEYWORDS.get("conductivity", [])
+    explicit_conductivity = any(marker in q for marker in conductivity_markers)
+
+    add_must("Cu")
+
+    if family == "brass":
+        add_must("Zn")
+        add_prop("corrosion_resistance")
+        if explicit_conductivity or "conductivity" not in result["target_properties"]:
+            add_prop("conductivity")
+        return
+
+    if "conductivity" in result["target_properties"] and not explicit_conductivity:
+        result["target_properties"] = [prop for prop in result["target_properties"] if prop != "conductivity"]
+
+    if family == "bronze":
+        add_must("Sn")
+        add_prop("wear_resistance")
+        add_prop("corrosion_resistance")
+    elif family == "aluminum_bronze":
+        add_must("Al")
+        add_prop("high_strength")
+        add_prop("wear_resistance")
+        add_prop("corrosion_resistance")
+    elif family == "phosphor_bronze":
+        add_must("Sn")
+        add_must("P")
+        add_prop("fatigue_resistance")
+        add_prop("wear_resistance")
+        add_prop("corrosion_resistance")
+    elif family == "silicon_bronze":
+        add_must("Si")
+        add_prop("corrosion_resistance")
+        add_prop("weldability")
 
 
 def _is_simple_chat(q):
@@ -752,7 +625,14 @@ def _looks_like_study(q):
 
 
 def _ask_llm(query, memory=None):
-    messages = [{"role": "system", "content": SYSTEM_PROMPT + "\nReturn valid JSON only."}]
+    schema_text = json.dumps(INTENT_SCHEMA, ensure_ascii=True)
+    system_prompt = (
+        SYSTEM_PROMPT
+        + "\nReturn valid JSON only."
+        + "\nSchema:\n"
+        + schema_text
+    )
+    messages = [{"role": "system", "content": system_prompt}]
     if memory:
         context = memory.get_context_for_llm()
         if context:
@@ -822,11 +702,20 @@ def _enforce_structured_core(result, query):
 
     _extract_element_exclusions_from_text(result, q)
     _apply_property_guidance(result, q)
+    _apply_family_guidance(result, q)
 
     if result["constraints"].get("no_ni") and "Ni" not in result["exclude_elements"]:
         result["exclude_elements"].append("Ni")
     if result["constraints"].get("no_co") and "Co" not in result["exclude_elements"]:
         result["exclude_elements"].append("Co")
+    if result["constraints"].get("no_pb") and "Pb" not in result["exclude_elements"]:
+        result["exclude_elements"].append("Pb")
+    if result["constraints"].get("no_cd") and "Cd" not in result["exclude_elements"]:
+        result["exclude_elements"].append("Cd")
+    if result["constraints"].get("rohs_compliant"):
+        for restricted in ["Pb", "Cd", "Hg"]:
+            if restricted not in result["exclude_elements"]:
+                result["exclude_elements"].append(restricted)
 
     if not result["target_properties"]:
         result["target_properties"] = list(APPLICATION_DEFAULT_PROPERTIES.get(
@@ -862,12 +751,16 @@ def _application_from_composition(composition):
         return "structural"
     if dominant in {"Ni", "Co"}:
         return "superalloy"
+    if dominant in {"Bi", "Sn", "In", "Ga", "Pb", "Cd"}:
+        return "fusible_alloy"
     if dominant == "Ti":
         return "ti_alloy"
     if dominant == "Al":
         return "al_alloy"
     if dominant == "Cu":
         return "cu_alloy"
+    if dominant in {"Ag", "Au", "Si", "Ge"}:
+        return "electronic_alloy"
     if dominant == "Zr":
         return "nuclear"
     return "open_alloy"
@@ -883,9 +776,10 @@ def _apply_property_guidance(result, q):
             result["must_include"].append(el)
 
     if "corrosion_resistance" in props:
-        add_must("Cr")
-        if app in {"stainless", "superalloy"} or any(k in q for k in ["marine", "chloride", "seawater"]):
-            add_must("Mo")
+        if app in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
+            add_must("Cr")
+            if app in {"stainless", "superalloy"} or any(k in q for k in ["marine", "chloride", "seawater"]):
+                add_must("Mo")
 
     if "high_temperature_strength" in props or "creep_resistance" in props:
         if "Ni" not in result["exclude_elements"]:
@@ -895,15 +789,42 @@ def _apply_property_guidance(result, q):
         add_must("Cr")
 
     if "wear_resistance" in props or "hardness" in props:
-        if "C" not in result["exclude_elements"]:
-            add_must("C")
-        if "V" not in result["exclude_elements"]:
-            add_must("V")
+        if app in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
+            if "C" not in result["exclude_elements"]:
+                add_must("C")
+            if "V" not in result["exclude_elements"]:
+                add_must("V")
 
     if "conductivity" in props:
         if app is None or app == "general_structural":
-            result["application"] = "cu_alloy"
-        add_must("Cu")
+            result["application"] = "electronic_alloy"
+        if result["application"] == "electronic_alloy":
+            if any(k in q for k in ["semiconductor", "chip", "wafer", "package", "interconnect"]):
+                if "Cu" not in result["exclude_elements"]:
+                    add_must("Cu")
+            else:
+                add_must("Cu")
+        else:
+            add_must("Cu")
+
+    if "low_melting_point" in props:
+        if app is None or app in {"general_structural", "open_alloy"}:
+            result["application"] = "fusible_alloy"
+        for preferred in ["Sn", "Bi", "In", "Ga"]:
+            if preferred not in result["exclude_elements"]:
+                add_must(preferred)
+                break
+        for unsafe_default in ["Hg", "Cd", "Tl"]:
+            if unsafe_default not in result["exclude_elements"] and unsafe_default.lower() not in q:
+                result["exclude_elements"].append(unsafe_default)
+
+    if result.get("application") == "fusible_alloy":
+        electrical_fuse_markers = [
+            "electrical fuse", "current", "amp", "overcurrent", "circuit protection", "low resistance", "high conductivity"
+        ]
+        if any(marker in q for marker in electrical_fuse_markers):
+            if "conductivity" not in result["target_properties"]:
+                result["target_properties"].append("conductivity")
 
     if "low_density" in props and result.get("application") == "general_structural":
         if "Ti" not in result["exclude_elements"]:
@@ -915,6 +836,10 @@ def _apply_property_guidance(result, q):
         for expensive in ["Re", "Ta", "Hf"]:
             if expensive not in result["exclude_elements"]:
                 result["exclude_elements"].append(expensive)
+    if constraints.get("rohs_compliant"):
+        for restricted in ["Pb", "Cd", "Hg"]:
+            if restricted not in result["exclude_elements"]:
+                result["exclude_elements"].append(restricted)
 
 
 

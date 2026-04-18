@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
@@ -12,6 +13,8 @@ from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+from llms.client import get_available_providers
 
 from .schemas import ApiResponse
 from .schemas import CompositionAnalyzeRequest
@@ -28,10 +31,23 @@ from .services.serialization import serialize_any
 
 logger = logging.getLogger("AIDE.api")
 
+
+@asynccontextmanager
+async def app_lifespan(_: FastAPI):
+    """Emit startup diagnostics once for the remote-only API runtime."""
+    logger.info("AIDE v5 API starting")
+    logger.info("CORS origins: %s", origins)
+    providers = [provider["name"] for provider in get_available_providers()]
+    logger.info("Remote LLM mode: enabled")
+    logger.info("Configured remote LLM providers: %s", providers or ["none"])
+    yield
+
+
 app = FastAPI(
     title="AIDE v5 API",
     version="0.3.0",
     description="API wrapper for AIDE alloy design and analysis engines.",
+    lifespan=app_lifespan,
 )
 
 
@@ -60,15 +76,6 @@ async def request_logger(request: Request, call_next):
     elapsed = round((time.perf_counter() - start) * 1000, 1)
     logger.info("%s %s %s %.1fms", request.method, request.url.path, response.status_code, elapsed)
     return response
-
-
-@app.on_event("startup")
-def startup_diagnostics():
-    logger.info("AIDE v5 API starting")
-    logger.info("CORS origins: %s", origins)
-    logger.info("Local LLM enabled: %s", os.environ.get("AIDE_USE_LOCAL_LLM", "1"))
-    logger.info("Remote LLM enabled: %s", os.environ.get("AIDE_ENABLE_REMOTE_LLM", "0"))
-    logger.info("Local intent enabled: %s", os.environ.get("AIDE_USE_LOCAL_INTENT", "1"))
 
 
 @app.get("/", response_model=ApiResponse)

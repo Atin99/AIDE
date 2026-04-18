@@ -1,4 +1,4 @@
-import sys, os, time, logging
+import sys, os, time, logging, math
 from dataclasses import dataclass, field
 from typing import Optional, Callable
 
@@ -9,6 +9,9 @@ from physics.base import mol_to_wt, wt_to_mol, norm
 
 logger = logging.getLogger("AIDE.pipeline")
 
+FUSIBLE_ELEMENTS = {"Bi", "Sn", "In", "Ga", "Pb", "Cd", "Sb", "Zn", "Hg", "Tl"}
+ELECTRONIC_ELEMENTS = {"Cu", "Al", "Ag", "Au", "Sn", "In", "Ga", "Si", "Ge", "Pd", "Pt", "Sb", "As"}
+HIGH_MELT_STRUCTURAL_ELEMENTS = {"Fe", "Cr", "Ni", "Co", "Mo", "W", "Nb", "Ta", "Ti", "V", "Zr", "Hf"}
 
 @dataclass
 class PipelineStep:
@@ -34,6 +37,8 @@ class Candidate:
     score: float = 0.0
     weak_domains: list = field(default_factory=list)
     iteration: int = 0
+    result_type: str = "generated"
+    provenance: Optional[dict] = None
 
 
 @dataclass
@@ -47,6 +52,7 @@ class PipelineResult:
     total_time: float = 0.0
     explanation: str = ""
     correlation_insights: list = field(default_factory=list)
+    generation_stats: dict = field(default_factory=dict)
     mode: str = "design"
 
 
@@ -80,15 +86,34 @@ def _intent_required_elements(intent, query=""):
     props = set(intent.get("target_properties", []) or [])
     constraints = dict(intent.get("constraints", {}) or {})
     app = intent.get("application") or ""
+    family = (constraints.get("alloy_family") or "").lower()
     q = (query or "").lower()
 
     if constraints.get("no_ni"):
         exclude.add("Ni")
     if constraints.get("no_co"):
         exclude.add("Co")
+    if constraints.get("no_pb"):
+        exclude.add("Pb")
+    if constraints.get("no_cd"):
+        exclude.add("Cd")
+    if constraints.get("rohs_compliant"):
+        exclude.update({"Pb", "Cd", "Hg"})
 
     if app in {"stainless", "structural", "carbon_steel"}:
         must.add("Fe")
+    if app == "fusible_alloy":
+        for preferred in ["Sn", "Bi", "In", "Ga"]:
+            if preferred not in exclude:
+                must.add(preferred)
+                break
+    if app == "electronic_alloy":
+        if any(k in q for k in ["semiconductor", "wafer"]) and "Si" not in exclude:
+            must.add("Si")
+        elif any(k in q for k in ["bond wire", "wire bond"]) and "Cu" not in exclude:
+            must.add("Cu")
+        elif "Cu" not in exclude:
+            must.add("Cu")
     if app == "stainless":
         must.add("Cr")
     if app == "superalloy":
@@ -103,14 +128,28 @@ def _intent_required_elements(intent, query=""):
         must.add("Al")
     if app == "cu_alloy":
         must.add("Cu")
+        if family == "brass" and "Zn" not in exclude:
+            must.add("Zn")
+        if family == "bronze" and "Sn" not in exclude:
+            must.add("Sn")
+        if family == "aluminum_bronze" and "Al" not in exclude:
+            must.add("Al")
+        if family == "phosphor_bronze":
+            if "Sn" not in exclude:
+                must.add("Sn")
+            if "P" not in exclude:
+                must.add("P")
+        if family == "silicon_bronze" and "Si" not in exclude:
+            must.add("Si")
     if app == "nuclear":
         if "Zr" not in exclude:
             must.add("Zr")
 
     if "corrosion_resistance" in props or any(k in q for k in ["marine", "chloride", "seawater", "pitting"]):
-        must.add("Cr")
-        if "Mo" not in exclude:
-            must.add("Mo")
+        if app in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
+            must.add("Cr")
+            if "Mo" not in exclude and (app in {"stainless", "superalloy"} or any(k in q for k in ["marine", "chloride", "seawater", "pitting"])):
+                must.add("Mo")
 
     if "high_temperature_strength" in props or "creep_resistance" in props:
         if "Ni" not in exclude:
@@ -120,12 +159,13 @@ def _intent_required_elements(intent, query=""):
         must.add("Cr")
 
     if "wear_resistance" in props or "hardness" in props:
-        if "C" not in exclude:
-            must.add("C")
-        if "V" not in exclude:
-            must.add("V")
-        if "W" not in exclude:
-            must.add("W")
+        if app in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
+            if "C" not in exclude:
+                must.add("C")
+            if "V" not in exclude:
+                must.add("V")
+            if "W" not in exclude:
+                must.add("W")
 
     if constraints.get("cost_level") == "low":
         exclude.update({"Re", "Ta", "Hf"})
@@ -137,6 +177,8 @@ def _intent_required_elements(intent, query=""):
 def _default_seed_for_application(application):
     app = (application or "").lower()
     seeds = {
+        "fusible_alloy": {"Sn": 0.52, "Bi": 0.28, "In": 0.14, "Ag": 0.04, "Cu": 0.02},
+        "electronic_alloy": {"Cu": 0.74, "Sn": 0.12, "Ag": 0.07, "Au": 0.03, "Si": 0.02, "In": 0.02},
         "stainless": {"Fe": 0.66, "Cr": 0.19, "Ni": 0.08, "Mo": 0.04, "Mn": 0.02, "N": 0.01},
         "structural": {"Fe": 0.95, "Mn": 0.02, "Si": 0.02, "C": 0.01},
         "general_structural": {"Fe": 0.95, "Mn": 0.02, "Si": 0.02, "C": 0.01},
@@ -172,6 +214,8 @@ def _apply_intent_to_wt(wt, intent, query=""):
     constraints = dict(intent.get("constraints", {}) or {})
     props = set(intent.get("target_properties", []) or [])
     rd = intent.get("research_data")
+    family = (constraints.get("alloy_family") or "").lower()
+    q = (query or "").lower()
 
     if rd and rd.base_elements:
         base = rd.base_elements[0]
@@ -183,11 +227,47 @@ def _apply_intent_to_wt(wt, intent, query=""):
             continue
         wt = _set_floor(wt, symbol, 0.01)
 
+    if intent.get("application") == "cu_alloy":
+        wt = _set_floor(wt, "Cu", 0.55)
+        if family == "brass":
+            if "Zn" not in exclude:
+                wt = _set_floor(wt, "Zn", 0.22)
+            for symbol, cap in {"Sn": 0.08, "Al": 0.07, "Ni": 0.07, "Si": 0.05, "Fe": 0.05, "Cr": 0.03, "Mo": 0.02, "W": 0.01}.items():
+                if symbol in wt:
+                    wt[symbol] = min(wt[symbol], cap)
+        elif family == "bronze":
+            if "Sn" not in exclude:
+                wt = _set_floor(wt, "Sn", 0.08)
+            for symbol, cap in {"Zn": 0.04, "Al": 0.06, "Si": 0.05, "Fe": 0.05, "Ni": 0.05, "Mn": 0.05, "Cr": 0.03, "Mo": 0.02, "W": 0.01}.items():
+                if symbol in wt:
+                    wt[symbol] = min(wt[symbol], cap)
+        elif family == "aluminum_bronze":
+            if "Al" not in exclude:
+                wt = _set_floor(wt, "Al", 0.05)
+            for symbol, cap in {"Zn": 0.03, "Sn": 0.05, "Cr": 0.03, "Mo": 0.02}.items():
+                if symbol in wt:
+                    wt[symbol] = min(wt[symbol], cap)
+        elif family == "phosphor_bronze":
+            if "Sn" not in exclude:
+                wt = _set_floor(wt, "Sn", 0.04)
+            if "P" not in exclude:
+                wt = _set_floor(wt, "P", 0.002)
+            for symbol, cap in {"Zn": 0.03, "Cr": 0.02, "Mo": 0.02}.items():
+                if symbol in wt:
+                    wt[symbol] = min(wt[symbol], cap)
+        elif family == "silicon_bronze":
+            if "Si" not in exclude:
+                wt = _set_floor(wt, "Si", 0.01)
+            for symbol, cap in {"Zn": 0.03, "Sn": 0.05, "Cr": 0.02, "Mo": 0.02}.items():
+                if symbol in wt:
+                    wt[symbol] = min(wt[symbol], cap)
+
     if "corrosion_resistance" in props:
-        if "Cr" not in exclude:
-            wt = _set_floor(wt, "Cr", 0.14)
-        if "Mo" not in exclude and any(k in query.lower() for k in ["marine", "chloride", "seawater", "pitting"]):
-            wt = _set_floor(wt, "Mo", 0.02)
+        if intent.get("application") in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
+            if "Cr" not in exclude:
+                wt = _set_floor(wt, "Cr", 0.14)
+            if "Mo" not in exclude and any(k in query.lower() for k in ["marine", "chloride", "seawater", "pitting"]):
+                wt = _set_floor(wt, "Mo", 0.02)
 
     if "high_temperature_strength" in props or "creep_resistance" in props:
         if "Ni" not in exclude:
@@ -198,16 +278,63 @@ def _apply_intent_to_wt(wt, intent, query=""):
             wt = _set_floor(wt, "Cr", 0.12)
 
     if "wear_resistance" in props or "hardness" in props:
-        if "C" not in exclude:
-            wt = _set_floor(wt, "C", 0.006)
-        if "V" not in exclude:
-            wt = _set_floor(wt, "V", 0.01)
+        if intent.get("application") in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
+            if "C" not in exclude:
+                wt = _set_floor(wt, "C", 0.006)
+            if "V" not in exclude:
+                wt = _set_floor(wt, "V", 0.01)
+
+    if "low_melting_point" in props or intent.get("application") == "fusible_alloy":
+        preferred_base = "Sn"
+        if any(k in q for k in ["liquid metal", "gallium"]) and "Ga" not in exclude:
+            preferred_base = "Ga"
+        elif any(k in q for k in ["fuse alloy", "fuse wire", "fusible", "fusible wire", "thermal fuse"]) and "Bi" not in exclude:
+            preferred_base = "Bi"
+        elif "Sn" in exclude and "Bi" not in exclude:
+            preferred_base = "Bi"
+        if preferred_base not in exclude:
+            wt = _set_floor(wt, preferred_base, 0.30)
+        if "In" not in exclude:
+            wt = _set_floor(wt, "In", 0.02)
+        if any(k in q for k in ["lead-free", "pb-free", "rohs"]):
+            for bad in ["Pb", "Cd", "Hg"]:
+                wt.pop(bad, None)
+        for structural_el, cap in {
+            "Fe": 0.12, "Cr": 0.10, "Ni": 0.10, "Co": 0.08, "Mo": 0.06,
+            "W": 0.04, "Nb": 0.04, "Ta": 0.03, "Ti": 0.05, "V": 0.04,
+        }.items():
+            if structural_el in wt:
+                wt[structural_el] = min(wt[structural_el], cap)
+
+    if "conductivity" in props or intent.get("application") == "electronic_alloy":
+        if any(k in q for k in ["semiconductor", "wafer"]) and "Si" not in exclude:
+            wt = _set_floor(wt, "Si", 0.15)
+        elif "Cu" not in exclude:
+            wt = _set_floor(wt, "Cu", 0.35)
+        if any(k in q for k in ["bond wire", "wire bond"]):
+            for el, floor in {"Ag": 0.04, "Au": 0.02}.items():
+                if el not in exclude:
+                    wt = _set_floor(wt, el, floor)
+        if any(k in q for k in ["package", "interconnect", "solder bump", "leadframe"]) and "Sn" not in exclude:
+            wt = _set_floor(wt, "Sn", 0.06)
+        for high_resistivity_el, cap in {
+            "Fe": 0.12, "Cr": 0.10, "Mo": 0.08, "W": 0.06, "Nb": 0.05,
+            "Ta": 0.05, "Hf": 0.04, "Re": 0.02,
+        }.items():
+            if high_resistivity_el in wt:
+                wt[high_resistivity_el] = min(wt[high_resistivity_el], cap)
 
     if constraints.get("cost_level") == "low":
         caps = {"Ni": 0.08, "Co": 0.05, "Re": 0.01, "Ta": 0.01, "Hf": 0.01, "W": 0.06}
         for symbol, cap in caps.items():
             if symbol in wt:
                 wt[symbol] = min(wt[symbol], cap)
+    if constraints.get("no_pb") or constraints.get("rohs_compliant"):
+        wt.pop("Pb", None)
+    if constraints.get("no_cd") or constraints.get("rohs_compliant"):
+        wt.pop("Cd", None)
+    if constraints.get("rohs_compliant"):
+        wt.pop("Hg", None)
 
     if rd and rd.base_elements:
         base = rd.base_elements[0]
@@ -234,7 +361,13 @@ def _condition_candidate_with_intent(candidate, intent, query, reason_suffix):
         rationale = candidate.rationale or "Generated baseline"
         if reason_suffix:
             rationale = f"{rationale} | {reason_suffix}"
-        return Candidate(composition=mol, composition_wt=conditioned_wt, rationale=rationale)
+        return Candidate(
+            composition=mol, 
+            composition_wt=conditioned_wt, 
+            rationale=rationale,
+            result_type=candidate.result_type,
+            provenance=candidate.provenance
+        )
     except Exception:
         return candidate
 
@@ -266,7 +399,9 @@ class BaselinePredictor:
                 try:
                     mol = validate_composition(wt_to_mol(wt))
                     base = Candidate(composition=mol, composition_wt=wt,
-                                     rationale=f"Exact match: {intent['alloy_name']}")
+                                     rationale=f"Exact match: {intent['alloy_name']}",
+                                     result_type="catalog",
+                                     provenance=alloy.get("provenance"))
                     return _condition_candidate_with_intent(
                         base, intent, query, "intent-conditioned seed"
                     )
@@ -395,7 +530,7 @@ class MultiCompositionGenerator:
 
             template_comps = generate(
                 query=query,
-                n=max(n, 12),
+                n=max(n * 2, 18),
                 only_elements=intent.get("only_elements"),
                 must_include=intent.get("must_include"),
                 exclude_elements=intent.get("exclude_elements"),
@@ -419,7 +554,7 @@ class MultiCompositionGenerator:
 
             exploratory_comps = generate(
                 query=query,
-                n=max(8, n // 2),
+                n=max(12, n),
                 only_elements=intent.get("only_elements"),
                 must_include=intent.get("must_include"),
                 exclude_elements=intent.get("exclude_elements"),
@@ -442,6 +577,67 @@ class MultiCompositionGenerator:
                     continue
         except Exception:
             pass
+
+        target_floor = max(10, n + 2)
+        if len(candidates) < target_floor:
+            try:
+                relaxed_app = intent.get("application", "")
+                extra_target = max(18, target_floor * 3)
+                fallback_only = intent.get("only_elements")
+                fallback_must = intent.get("must_include")
+                fallback_exclude = intent.get("exclude_elements")
+
+                relaxed_batches = []
+                if relaxed_app:
+                    relaxed_batches.append({
+                        "application": relaxed_app,
+                        "only_elements": fallback_only,
+                        "must_include": fallback_must,
+                        "exclude_elements": fallback_exclude,
+                    })
+                if relaxed_app and relaxed_app != "open_alloy":
+                    relaxed_batches.append({
+                        "application": "open_alloy",
+                        "only_elements": fallback_only,
+                        "must_include": fallback_must,
+                        "exclude_elements": fallback_exclude,
+                    })
+                if fallback_only:
+                    relaxed_batches.append({
+                        "application": "",
+                        "only_elements": fallback_only,
+                        "must_include": fallback_must,
+                        "exclude_elements": fallback_exclude,
+                    })
+
+                for batch in relaxed_batches:
+                    extra_comps = generate(
+                        query=query,
+                        n=extra_target,
+                        only_elements=batch["only_elements"],
+                        must_include=batch["must_include"],
+                        exclude_elements=batch["exclude_elements"],
+                        application=batch["application"],
+                        base_composition=None,
+                    )
+                    for comp in extra_comps:
+                        try:
+                            wt = _apply_intent_to_wt(mol_to_wt(comp), intent, query)
+                            mol = validate_composition(wt_to_mol(wt))
+                            candidates.append(
+                                Candidate(
+                                    composition=mol,
+                                    composition_wt=wt,
+                                    rationale="Relaxed exploratory backfill",
+                                    iteration=iteration,
+                                )
+                            )
+                        except Exception:
+                            continue
+                    if len(candidates) >= target_floor * 2:
+                        break
+            except Exception:
+                pass
 
         if len(candidates) == initial_len:
             seed_wt = _apply_intent_to_wt(
@@ -489,12 +685,15 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
         parts.append(f"Weak domains to improve: {feedback.get('weak_summary', 'none')}")
         
     parts.append(f"\nPropose {n} DIVERSE alloy compositions as weight fractions summing to 1.0.")
-    parts.append("Vary element ratios, add or remove minor alloying elements. ALWAYS keep the base element dominant.")
+    parts.append("Vary chemistry families, dominant elements, minor additions, and element count. Avoid near-duplicates.")
+    parts.append("At least one-third of the candidates should be exploratory or risky and may fail some domains if they test a different mechanism.")
+    parts.append("Do not return the same top-3 element set repeatedly unless the ratios are materially different.")
+    parts.append("ALWAYS keep the base element dominant only when the application truly requires it.")
     
     system = ("You are an expert computational metallurgist. "
               "Return ONLY JSON: {\"compositions\": [{\"comp_wt\": {\"Fe\": 0.65}, \"rationale\": \"...\"}]}")
     result = chat_json([{"role": "system", "content": system},
-                        {"role": "user", "content": "\n".join(parts)}], max_tokens=2000, temperature=0.7)
+                        {"role": "user", "content": "\n".join(parts)}], max_tokens=2600, temperature=0.85)
     
     if not result or "compositions" not in result:
         return []
@@ -548,19 +747,64 @@ class PhysicsMLEvaluator:
 
     @staticmethod
     def _overalloying_penalty(composition, query):
-        import math
         base_frac = max(composition.values())
         solute_frac = 1.0 - base_frac
         solute_count = sum(1 for v in composition.values() if v > 0.005)
         q = query.lower()
+        if any(k in q for k in ["fusible", "fusible wire", "low melting", "solder", "thermal fuse", "fuse alloy", "fuse wire"]):
+            return math.exp(-0.35 * max(0, solute_count - 5))
+        if any(k in q for k in ["chip", "semiconductor", "interconnect", "bond wire", "leadframe"]):
+            return math.exp(-0.45 * max(0, solute_count - 6))
         if any(k in q for k in ["electr", "conduct", "wire", "thermal"]):
-            return math.exp(-9.0 * solute_frac)
+            return math.exp(-7.0 * solute_frac)
         elif any(k in q for k in ["turbine", "superalloy", "creep", "jet"]):
             return math.exp(-0.25 * max(0, solute_count - 9))
         elif any(k in q for k in ["biomedical", "implant", "bone"]):
             return math.exp(-0.6 * max(0, solute_count - 4))
         else:
             return math.exp(-0.45 * max(0, solute_count - 6))
+
+    @staticmethod
+    def _application_alignment(composition, query):
+        from physics.base import wmean
+
+        q = (query or "").lower()
+        fusible_query = any(k in q for k in ["fusible", "fusible wire", "low melting", "low-melting", "solder", "thermal fuse", "fuse alloy", "fuse wire", "liquid metal"])
+        electronic_query = any(k in q for k in ["chip", "semiconductor", "interconnect", "bond wire", "wire bond", "leadframe", "microelectronics", "electronic packaging"])
+
+        if fusible_query:
+            tm = wmean(composition, "Tm")
+            fusible_frac = sum(composition.get(el, 0.0) for el in FUSIBLE_ELEMENTS)
+            structural_frac = sum(composition.get(el, 0.0) for el in HIGH_MELT_STRUCTURAL_ELEMENTS)
+            tm_factor = 1.0
+            if tm is not None:
+                tm_factor = max(0.12, min(1.45, 1.55 - max(0.0, tm - 420.0) / 900.0))
+            family_factor = max(0.15, min(1.45, 0.55 + 1.20 * fusible_frac - 0.95 * structural_frac))
+            toxic_penalty = 1.0
+            if any(k in q for k in ["lead-free", "pb-free", "rohs", "cadmium-free", "cd-free"]):
+                toxic_frac = composition.get("Pb", 0.0) + composition.get("Cd", 0.0) + composition.get("Hg", 0.0)
+                toxic_penalty = max(0.20, 1.0 - 2.5 * toxic_frac)
+            multiplier = ((tm_factor + family_factor) / 2.0) * toxic_penalty
+            note = f"fusible-alignment={multiplier:.2f} (Tm={tm:.0f}K)" if tm is not None else f"fusible-alignment={multiplier:.2f}"
+            return max(0.12, min(1.0, multiplier)), note
+
+        if electronic_query:
+            resistivity = wmean(composition, "resistivity")
+            thermal_cond = wmean(composition, "thermal_cond")
+            electronic_frac = sum(composition.get(el, 0.0) for el in ELECTRONIC_ELEMENTS)
+            structural_frac = sum(composition.get(el, 0.0) for el in HIGH_MELT_STRUCTURAL_ELEMENTS)
+            rho_factor = 1.0
+            if resistivity is not None:
+                rho_factor = max(0.25, min(1.35, 1.35 - 0.45 * math.log10(max(resistivity, 1e-3))))
+            k_factor = 1.0
+            if thermal_cond is not None:
+                k_factor = max(0.40, min(1.35, 0.72 + min(thermal_cond, 320.0) / 500.0))
+            family_factor = max(0.20, min(1.40, 0.65 + 0.90 * electronic_frac - 0.80 * structural_frac))
+            multiplier = (rho_factor + k_factor + family_factor) / 3.0
+            note = f"electronics-alignment={multiplier:.2f}"
+            return max(0.18, min(1.0, multiplier)), note
+
+        return 1.0, ""
 
     @staticmethod
     def evaluate(candidates, query="", T_K=298.0, weather=None, domains_focus=None,
@@ -610,10 +854,13 @@ class PhysicsMLEvaluator:
                         weighted_score = (weighted_sum / weight_used) if weight_used > 0 else base_score
                         
                         penalty = PhysicsMLEvaluator._overalloying_penalty(cand.composition, query)
-                        cand.score = round(weighted_score * penalty, 2)
+                        alignment_multiplier, alignment_note = PhysicsMLEvaluator._application_alignment(cand.composition, query)
+                        cand.score = round(max(0.0, min(100.0, weighted_score * penalty * alignment_multiplier)), 2)
                         
                         if penalty < 0.8:
                             cand.weak_domains.append({"name": "Over-alloying Penalty", "score": int(penalty*100), "fails": ["Excessive solute additions for application"]})
+                        if alignment_multiplier < 0.85 and alignment_note:
+                            cand.weak_domains.append({"name": "Application Mismatch", "score": int(alignment_multiplier * 100), "fails": [alignment_note]})
 
                 if constraints and cand.score > 0:
                     _apply_constraints(cand, constraints)
@@ -649,6 +896,10 @@ def _apply_constraints(cand, constraints):
         est_yield = hv / 3.0 if hv else 0
         if est_yield < constraints["min_yield_MPa"]:
             violations.append(f"Est. yield {est_yield:.0f} < {constraints['min_yield_MPa']}")
+    if constraints.get("max_melting_point_K"):
+        tm = wmean(cand.composition, "Tm")
+        if tm and tm > constraints["max_melting_point_K"]:
+            violations.append(f"Melting point {tm:.0f} K > {constraints['max_melting_point_K']:.0f} K")
     if violations:
         cand.score = max(0, cand.score - 10 * len(violations))
         cand.weak_domains.append({"name": "Constraint Violations", "score": 0, "fails": violations})
@@ -768,7 +1019,59 @@ def _compute_ml_confidence(predictions: dict) -> float:
     return round(sum(scores) / len(scores), 2)
 
 
-def _ml_prefilter(candidates: list, intent: dict, use_ml: bool = True) -> list:
+def _cheap_candidate_score(cand, intent: dict, query: str) -> float:
+    comp = cand.composition or {}
+    must_include = intent.get("must_include") or []
+    exclude = set(intent.get("exclude_elements") or [])
+
+    must_score = 1.0
+    if must_include:
+        hits = sum(1 for symbol in must_include if comp.get(symbol, 0.0) > 0.004)
+        must_score = hits / max(1, len(must_include))
+
+    exclude_penalty = 1.0
+    if exclude:
+        bad_frac = sum(comp.get(symbol, 0.0) for symbol in exclude)
+        exclude_penalty = max(0.05, 1.0 - 8.0 * bad_frac)
+
+    penalty = PhysicsMLEvaluator._overalloying_penalty(comp, query)
+    alignment_multiplier, _ = PhysicsMLEvaluator._application_alignment(comp, query)
+    return 100.0 * must_score * exclude_penalty * penalty * alignment_multiplier
+
+
+def _downselect_candidates(candidates: list, limit: int, query: str, intent: dict) -> list:
+    if limit <= 0 or len(candidates) <= limit:
+        return candidates
+
+    ranked = sorted(
+        candidates,
+        key=lambda cand: _cheap_candidate_score(cand, intent, query),
+        reverse=True,
+    )
+
+    buckets = {}
+    for cand in ranked:
+        comp = cand.composition_wt or cand.composition or {}
+        sig = _composition_signature(comp, top_n=3, min_frac=0.02)
+        if not sig:
+            sig = tuple(sorted(comp.keys())[:3])
+        buckets.setdefault(sig, []).append(cand)
+
+    selected = []
+    while buckets and len(selected) < limit:
+        for sig in list(buckets.keys()):
+            if not buckets[sig]:
+                buckets.pop(sig, None)
+                continue
+            selected.append(buckets[sig].pop(0))
+            if not buckets[sig]:
+                buckets.pop(sig, None)
+            if len(selected) >= limit:
+                break
+    return selected
+
+
+def _ml_prefilter(candidates: list, intent: dict, use_ml: bool = True, limit: int = 15) -> list:
     if not use_ml:
         return candidates
 
@@ -805,7 +1108,7 @@ def _ml_prefilter(candidates: list, intent: dict, use_ml: bool = True) -> list:
             return candidates
 
         scored.sort(key=lambda x: -x[1])
-        return [c for c, _ in scored[:15]]
+        return [c for c, _ in scored[:max(1, limit)]]
 
     except Exception as e:
         logger.warning(f"[_ml_prefilter] Unexpected error ({e}); skipping ML pre-filter")
@@ -823,6 +1126,13 @@ class Pipeline:
         self.steps = []
         self.all_candidates = []
         self.best_score_history = []
+        self.generation_stats = {
+            "raw_generated": 0,
+            "post_dedupe": 0,
+            "downselected_for_physics": 0,
+            "physics_evaluated": 0,
+            "iterations": [],
+        }
 
     def _log(self, step_num, stage, thought, observation, agent=""):
         step = PipelineStep(step_num, stage, thought, observation, agent=agent)
@@ -903,6 +1213,19 @@ class Pipeline:
         best_score = 0.0
         improvement = 0
         iteration = 0
+        target_top_n = max(1, int(intent.get("n_results") or 10))
+        generation_budget_total = max(int(intent.get("generation_budget") or 0), max(500, target_top_n * 50))
+        physics_budget_total = max(int(intent.get("physics_budget") or 0), max(80, target_top_n * 8))
+        generation_budget_iter = max(40, math.ceil(generation_budget_total / max(1, self.max_iterations)))
+        physics_budget_iter = max(target_top_n * 3, math.ceil(physics_budget_total / max(1, self.max_iterations)))
+        self._log(
+            step_counter,
+            "budget",
+            f"Search budget: raw={generation_budget_total}, physics={physics_budget_total}",
+            f"per_iteration_generate={generation_budget_iter}, per_iteration_physics={physics_budget_iter}, target_top_n={target_top_n}",
+            agent="Pipeline",
+        )
+        step_counter += 1
         for iteration in range(self.max_iterations):
             feedback = None
             if iteration > 0:
@@ -914,9 +1237,16 @@ class Pipeline:
                       agent="MultiCompGenerator")
             step_counter += 1
             candidates = MultiCompositionGenerator.generate(
-                query, intent, baseline, n=max(intent.get('n_results', 50) // max(1, self.max_iterations), 8), iteration=iteration, feedback=feedback)
+                query, intent, baseline, n=generation_budget_iter, iteration=iteration, feedback=feedback)
+            iter_stats = {
+                "iteration": iteration + 1,
+                "raw_generated": len(candidates),
+            }
+            self.generation_stats["raw_generated"] += len(candidates)
             pre_dedupe = len(candidates)
-            candidates = _dedupe_candidates(candidates, similarity_threshold=0.02)
+            candidates = _dedupe_candidates(candidates, similarity_threshold=0.04)
+            iter_stats["post_dedupe"] = len(candidates)
+            self.generation_stats["post_dedupe"] += len(candidates)
             if len(candidates) != pre_dedupe:
                 self._log(step_counter, "dedupe",
                           f"Removed repeats: {pre_dedupe} -> {len(candidates)}",
@@ -925,19 +1255,32 @@ class Pipeline:
                 step_counter += 1
             if self.use_ml:
                 pre_count = len(candidates)
-                candidates = _ml_prefilter(candidates, intent, use_ml=True)
+                candidates = _ml_prefilter(candidates, intent, use_ml=True, limit=max(physics_budget_iter * 2, physics_budget_iter))
                 self._log(step_counter, "ml_prefilter",
                           f"ML pre-filter: {pre_count} -> {len(candidates)} candidates",
                           "Dropped low-yield predictions, re-ranked by ML confidence",
                           agent="MLPrefilter")
                 step_counter += 1
 
+            pre_screen = len(candidates)
+            candidates = _downselect_candidates(candidates, physics_budget_iter, query, intent)
+            iter_stats["downselected_for_physics"] = len(candidates)
+            self.generation_stats["downselected_for_physics"] += len(candidates)
+            if len(candidates) != pre_screen:
+                self._log(step_counter, "screen",
+                          f"Physics shortlist: {pre_screen} -> {len(candidates)}",
+                          "Cheap intent-alignment ranking + diversity round-robin before full physics",
+                          agent="Pipeline")
+                step_counter += 1
+
             self._log(step_counter, "evaluate",
                       f"Evaluating {len(candidates)} candidates",
                       "Running physics + ML...", agent="PhysicsMLEvaluator")
             step_counter += 1
+            self.generation_stats["physics_evaluated"] += len(candidates)
+            iter_stats["physics_evaluated"] = len(candidates)
             candidates = PhysicsMLEvaluator.evaluate(
-                candidates, T_K=T_K, weather=weather, domains_focus=domains_focus,
+                candidates, query=query, T_K=T_K, weather=weather, domains_focus=domains_focus,
                 constraints=self.constraints, dpa_rate=dpa_rate, pressure_MPa=pressure_MPa,
                 research_data=research_data)
 
@@ -961,12 +1304,13 @@ class Pipeline:
                       f"Best: {iter_best:.1f}/100 (delta {improvement:+.1f})",
                       f"Overall best: {best_score:.1f}/100", agent="PhysicsMLEvaluator")
             step_counter += 1
+            self.generation_stats["iterations"].append(iter_stats)
             if iteration > 0 and improvement < self.convergence_threshold:
                 self._log(step_counter, "converge", "Converged", "Stopping", agent="Pipeline")
                 step_counter += 1
                 break
         pre_final_dedupe = len(self.all_candidates)
-        self.all_candidates = _dedupe_candidates(self.all_candidates, similarity_threshold=0.015)
+        self.all_candidates = _dedupe_candidates(self.all_candidates, similarity_threshold=0.03)
         if len(self.all_candidates) != pre_final_dedupe:
             self._log(step_counter, "dedupe",
                       f"Cross-iteration unique set: {pre_final_dedupe} -> {len(self.all_candidates)}",
@@ -992,6 +1336,7 @@ class Pipeline:
             converged=(improvement < self.convergence_threshold if iteration > 0 else False),
             best_score=best_score, total_time=time.time() - t0,
             explanation=explanation, correlation_insights=correlation_insights,
+            generation_stats=self.generation_stats,
             mode=intent.get("mode", "design"))
 
 
@@ -1004,6 +1349,11 @@ def _composition_distance(comp_a, comp_b):
     return sum(abs(comp_a.get(k, 0.0) - comp_b.get(k, 0.0)) for k in keys)
 
 
+def _composition_signature(comp, top_n=4, min_frac=0.03):
+    ranked = sorted(comp.items(), key=lambda item: (-item[1], item[0]))
+    return tuple(sym for sym, frac in ranked[:top_n] if frac >= min_frac)
+
+
 def _dedupe_candidates(candidates, similarity_threshold=0.02):
     # Keep highest scoring instances first where possible.
     ranked = sorted(candidates, key=lambda c: getattr(c, "score", 0.0), reverse=True)
@@ -1012,8 +1362,16 @@ def _dedupe_candidates(candidates, similarity_threshold=0.02):
         comp = cand.composition_wt or cand.composition or {}
         if not comp:
             continue
-        if any(_composition_distance(comp, (u.composition_wt or u.composition or {})) <= similarity_threshold
-               for u in unique):
+        cand_sig = _composition_signature(comp)
+        if any(
+            _composition_distance(comp, (u.composition_wt or u.composition or {})) <= similarity_threshold
+            or (
+                cand_sig
+                and cand_sig == _composition_signature(u.composition_wt or u.composition or {})
+                and _composition_distance(comp, (u.composition_wt or u.composition or {})) <= similarity_threshold * 2.5
+            )
+            for u in unique
+        ):
             continue
         unique.append(cand)
     return unique

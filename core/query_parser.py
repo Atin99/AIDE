@@ -48,7 +48,7 @@ def parse_query(query: str) -> dict:
         "T_op_K":           298.0,
         "min_PREN":         None,
         "min_elements":     2,
-        "max_elements":     8,
+        "max_elements":     10,
         "notes":            query,
     }
 
@@ -108,7 +108,19 @@ def parse_query(query: str) -> dict:
         if word in ql:
             result["min_elements"] = result["max_elements"] = n; break
 
+    m_exact_count = re.search(r"\b(\d{1,2})\s*[-\s]?(?:element|component)\b", ql)
+    if m_exact_count:
+        try:
+            exact = int(m_exact_count.group(1))
+            if 2 <= exact <= 12:
+                result["min_elements"] = exact
+                result["max_elements"] = exact
+        except Exception:
+            pass
+
     for app, kws in [
+        ("fusible_alloy",   ["fuse alloy","fuse wire","fusible","fusible wire","low melting","low-melting","solder","solder alloy","thermal fuse","fusible link","braze filler"]),
+        ("electronic_alloy",["chip alloy","chip package","semiconductor","interconnect","bond wire","wire bond","solder bump","microelectronics","electronic packaging","leadframe"]),
         ("stainless",       ["stainless","316","304","duplex","marine","corrosion","bridge","pipeline","coastal"]),
         ("superalloy",      ["superalloy","turbine","jet","inconel","gas turbine","blade"]),
         ("ti_alloy",        ["titanium","ti-6","ti64","aerospace lightweight","ti alloy"]),
@@ -124,6 +136,11 @@ def parse_query(query: str) -> dict:
     ]:
         if any(kw in ql for kw in kws):
             result["application"] = app; break
+
+    if any(kw in ql for kw in ["lead-free", "pb-free", "rohs", "cadmium-free", "cd-free"]):
+        for symbol in ["Pb", "Cd", "Hg"]:
+            if symbol not in result["exclude_elements"]:
+                result["exclude_elements"].append(symbol)
 
     return result
 

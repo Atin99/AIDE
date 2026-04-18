@@ -1,0 +1,3093 @@
+{
+  "version": 1,
+  "alloys": [
+    {
+      "key": "1100",
+      "aliases": [
+        "AA1100",
+        "UNS A91100"
+      ],
+      "category": "aluminium",
+      "subcategory": "1xxx pure",
+      "composition_wt": {
+        "Al": 0.99,
+        "Si": 0.005,
+        "Fe": 0.005
+      },
+      "properties": {
+        "yield_MPa": 34,
+        "UTS_MPa": 90,
+        "elongation_pct": 35,
+        "density_gcc": 2.71
+      },
+      "applications": [
+        "foil",
+        "heat exchanger",
+        "chemical equipment"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "15-5PH",
+      "aliases": [
+        "15-5 PH",
+        "UNS S15500",
+        "1.4545"
+      ],
+      "category": "stainless",
+      "subcategory": "precipitation hardening",
+      "composition_wt": {
+        "Fe": 0.762,
+        "Cr": 0.15,
+        "Ni": 0.045,
+        "Cu": 0.035,
+        "Nb": 0.003,
+        "Mn": 0.005
+      },
+      "properties": {
+        "yield_MPa": 1000,
+        "UTS_MPa": 1070,
+        "elongation_pct": 10,
+        "density_gcc": 7.78
+      },
+      "applications": [
+        "valve",
+        "aerospace fitting",
+        "nuclear waste"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "17-4PH",
+      "aliases": [
+        "17-4 PH",
+        "UNS S17400",
+        "1.4542",
+        "630"
+      ],
+      "category": "stainless",
+      "subcategory": "precipitation hardening",
+      "composition_wt": {
+        "Fe": 0.744,
+        "Cr": 0.165,
+        "Ni": 0.045,
+        "Cu": 0.035,
+        "Nb": 0.003,
+        "Mn": 0.008
+      },
+      "properties": {
+        "yield_MPa": 1100,
+        "UTS_MPa": 1170,
+        "elongation_pct": 10,
+        "density_gcc": 7.78
+      },
+      "applications": [
+        "aerospace fasteners",
+        "nuclear waste casks",
+        "pump shafts"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "2014-T6",
+      "aliases": [
+        "AA2014",
+        "2014"
+      ],
+      "category": "aluminium",
+      "subcategory": "2xxx Cu",
+      "composition_wt": {
+        "Al": 0.93,
+        "Cu": 0.044,
+        "Mn": 0.008,
+        "Mg": 0.005,
+        "Si": 0.008,
+        "Fe": 0.005
+      },
+      "properties": {
+        "yield_MPa": 414,
+        "UTS_MPa": 483,
+        "elongation_pct": 13,
+        "density_gcc": 2.8
+      },
+      "applications": [
+        "aircraft fitting",
+        "truck frame",
+        "forging"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "2024-T3",
+      "aliases": [
+        "AA2024",
+        "2024",
+        "UNS A92024",
+        "AA2024-T3"
+      ],
+      "category": "aluminium",
+      "subcategory": "2xxx Cu",
+      "composition_wt": {
+        "Al": 0.932,
+        "Cu": 0.044,
+        "Mg": 0.015,
+        "Mn": 0.006,
+        "Fe": 0.002,
+        "Si": 0.001
+      },
+      "properties": {
+        "yield_MPa": 345,
+        "UTS_MPa": 483,
+        "elongation_pct": 18,
+        "density_gcc": 2.78,
+        "E_GPa": 73
+      },
+      "applications": [
+        "aircraft fuselage",
+        "wing skin",
+        "truck wheel"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "2205",
+      "aliases": [
+        "2205DSS",
+        "UNS S31803",
+        "1.4462",
+        "SAF 2205"
+      ],
+      "category": "stainless",
+      "subcategory": "duplex",
+      "composition_wt": {
+        "Fe": 0.68,
+        "Cr": 0.22,
+        "Ni": 0.055,
+        "Mo": 0.031,
+        "N": 0.0014,
+        "Mn": 0.0126
+      },
+      "properties": {
+        "yield_MPa": 448,
+        "UTS_MPa": 621,
+        "elongation_pct": 25,
+        "density_gcc": 7.82,
+        "PREN": 35.3
+      },
+      "applications": [
+        "offshore platform",
+        "desalination",
+        "chemical tanker",
+        "pulp and paper"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "2507",
+      "aliases": [
+        "2507SDSS",
+        "UNS S32750",
+        "1.4410",
+        "SAF 2507"
+      ],
+      "category": "stainless",
+      "subcategory": "super duplex",
+      "composition_wt": {
+        "Fe": 0.64,
+        "Cr": 0.25,
+        "Ni": 0.07,
+        "Mo": 0.04,
+        "N": 0.0027
+      },
+      "properties": {
+        "yield_MPa": 550,
+        "UTS_MPa": 800,
+        "elongation_pct": 15,
+        "density_gcc": 7.81,
+        "PREN": 43
+      },
+      "applications": [
+        "subsea",
+        "deep water",
+        "flue gas desulfurisation"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "3003",
+      "aliases": [
+        "AA3003",
+        "UNS A93003"
+      ],
+      "category": "aluminium",
+      "subcategory": "3xxx Mn",
+      "composition_wt": {
+        "Al": 0.975,
+        "Mn": 0.012,
+        "Fe": 0.007,
+        "Si": 0.006
+      },
+      "properties": {
+        "yield_MPa": 145,
+        "UTS_MPa": 150,
+        "elongation_pct": 8,
+        "density_gcc": 2.73
+      },
+      "applications": [
+        "cooking utensil",
+        "pressure vessel",
+        "chemical tank"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "301",
+      "aliases": [
+        "301SS",
+        "UNS S30100",
+        "1.4310"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.72,
+        "Cr": 0.17,
+        "Ni": 0.07,
+        "Mn": 0.02,
+        "Si": 0.005,
+        "C": 0.0015
+      },
+      "properties": {
+        "yield_MPa": 275,
+        "UTS_MPa": 760,
+        "elongation_pct": 60,
+        "density_gcc": 7.88
+      },
+      "applications": [
+        "spring",
+        "structural",
+        "railway car"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "304",
+      "aliases": [
+        "304SS",
+        "SS304",
+        "AISI 304",
+        "UNS S30400",
+        "1.4301"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.705,
+        "Cr": 0.185,
+        "Ni": 0.092,
+        "Mn": 0.018
+      },
+      "properties": {
+        "yield_MPa": 215,
+        "UTS_MPa": 505,
+        "elongation_pct": 70,
+        "density_gcc": 7.93,
+        "Tm_K": 1673
+      },
+      "applications": [
+        "food processing",
+        "chemical plant",
+        "kitchen sinks",
+        "architectural trim"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "304L",
+      "aliases": [
+        "304LSS",
+        "UNS S30403",
+        "1.4307"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.71,
+        "Cr": 0.185,
+        "Ni": 0.09,
+        "Mn": 0.01,
+        "C": 0.002,
+        "Si": 0.003
+      },
+      "properties": {
+        "yield_MPa": 170,
+        "UTS_MPa": 485,
+        "elongation_pct": 55,
+        "density_gcc": 7.93
+      },
+      "applications": [
+        "welded structures",
+        "chemical tanks"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "309",
+      "aliases": [
+        "309SS",
+        "UNS S30900",
+        "1.4833"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.605,
+        "Cr": 0.23,
+        "Ni": 0.13,
+        "Mn": 0.02,
+        "Si": 0.008,
+        "C": 0.002
+      },
+      "properties": {
+        "yield_MPa": 210,
+        "UTS_MPa": 515,
+        "density_gcc": 7.98
+      },
+      "applications": [
+        "furnace part",
+        "high temperature",
+        "heat exchanger"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "310",
+      "aliases": [
+        "310SS",
+        "UNS S31000",
+        "1.4845"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.53,
+        "Cr": 0.25,
+        "Ni": 0.2,
+        "Mn": 0.02
+      },
+      "properties": {
+        "yield_MPa": 205,
+        "UTS_MPa": 520,
+        "density_gcc": 7.98
+      },
+      "applications": [
+        "furnace",
+        "kiln",
+        "radiant tube"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "316H",
+      "aliases": [
+        "UNS S31609"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.67,
+        "Cr": 0.17,
+        "Ni": 0.12,
+        "Mo": 0.025,
+        "C": 0.005,
+        "Mn": 0.01
+      },
+      "properties": {
+        "yield_MPa": 205,
+        "UTS_MPa": 515,
+        "density_gcc": 7.99
+      },
+      "applications": [
+        "high temperature service",
+        "nuclear primary loops"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "316L",
+      "aliases": [
+        "316LSS",
+        "SS316L",
+        "AISI 316L",
+        "UNS S31603",
+        "1.4404"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.677,
+        "Cr": 0.17,
+        "Ni": 0.12,
+        "Mo": 0.022,
+        "Mn": 0.011
+      },
+      "properties": {
+        "yield_MPa": 170,
+        "UTS_MPa": 485,
+        "elongation_pct": 50,
+        "density_gcc": 7.99,
+        "PREN": 24.6,
+        "Tm_K": 1648
+      },
+      "applications": [
+        "marine hardware",
+        "surgical implant",
+        "pharmaceutical",
+        "coastal bridge"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "321",
+      "aliases": [
+        "321SS",
+        "UNS S32100",
+        "1.4541"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.68,
+        "Cr": 0.175,
+        "Ni": 0.095,
+        "Ti": 0.005,
+        "Mn": 0.02,
+        "Si": 0.005,
+        "C": 0.002
+      },
+      "properties": {
+        "yield_MPa": 205,
+        "UTS_MPa": 515,
+        "elongation_pct": 45,
+        "density_gcc": 7.92
+      },
+      "applications": [
+        "exhaust manifolds",
+        "aircraft engine parts",
+        "bellows"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "347",
+      "aliases": [
+        "347SS",
+        "UNS S34700",
+        "1.4550"
+      ],
+      "category": "stainless",
+      "subcategory": "austenitic",
+      "composition_wt": {
+        "Fe": 0.68,
+        "Cr": 0.175,
+        "Ni": 0.095,
+        "Nb": 0.007,
+        "Mn": 0.02,
+        "Si": 0.005,
+        "C": 0.002
+      },
+      "properties": {
+        "yield_MPa": 205,
+        "UTS_MPa": 515,
+        "elongation_pct": 45,
+        "density_gcc": 7.96
+      },
+      "applications": [
+        "nuclear pressure vessels",
+        "high temperature piping"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "410",
+      "aliases": [
+        "410SS",
+        "UNS S41000",
+        "1.4006"
+      ],
+      "category": "stainless",
+      "subcategory": "martensitic",
+      "composition_wt": {
+        "Fe": 0.862,
+        "Cr": 0.125,
+        "C": 0.008,
+        "Mn": 0.005
+      },
+      "properties": {
+        "yield_MPa": 275,
+        "UTS_MPa": 485,
+        "elongation_pct": 20,
+        "density_gcc": 7.74
+      },
+      "applications": [
+        "valve trim",
+        "pump shafts",
+        "cutlery"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "4140",
+      "aliases": [
+        "AISI 4140",
+        "42CrMo4",
+        "1.7225",
+        "SCM440"
+      ],
+      "category": "low_alloy",
+      "subcategory": "CrMo",
+      "composition_wt": {
+        "Fe": 0.962,
+        "Cr": 0.01,
+        "Mo": 0.002,
+        "C": 0.004,
+        "Mn": 0.009,
+        "Si": 0.003,
+        "P": 0.0003,
+        "S": 0.0004
+      },
+      "properties": {
+        "yield_MPa": 655,
+        "UTS_MPa": 1020,
+        "elongation_pct": 18,
+        "density_gcc": 7.85
+      },
+      "applications": [
+        "tooling",
+        "machinery",
+        "oil and gas",
+        "landing gear"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "430",
+      "aliases": [
+        "430SS",
+        "UNS S43000",
+        "1.4016"
+      ],
+      "category": "stainless",
+      "subcategory": "ferritic",
+      "composition_wt": {
+        "Fe": 0.818,
+        "Cr": 0.17,
+        "Mn": 0.01,
+        "Si": 0.002
+      },
+      "properties": {
+        "yield_MPa": 205,
+        "UTS_MPa": 450,
+        "elongation_pct": 22,
+        "density_gcc": 7.72
+      },
+      "applications": [
+        "automotive trim",
+        "dishwasher lining",
+        "refrigerator panels"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "4340",
+      "aliases": [
+        "AISI 4340",
+        "34CrNiMo6",
+        "1.6582",
+        "SNCM439"
+      ],
+      "category": "low_alloy",
+      "subcategory": "NiCrMo",
+      "composition_wt": {
+        "Fe": 0.95,
+        "Ni": 0.018,
+        "Cr": 0.008,
+        "Mo": 0.0025,
+        "C": 0.004,
+        "Mn": 0.007,
+        "Si": 0.003
+      },
+      "properties": {
+        "yield_MPa": 862,
+        "UTS_MPa": 1282,
+        "elongation_pct": 12,
+        "density_gcc": 7.85
+      },
+      "applications": [
+        "aircraft landing gear",
+        "power transmission",
+        "heavy-duty shaft"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "440C",
+      "aliases": [
+        "440CSS",
+        "UNS S44004",
+        "1.4125"
+      ],
+      "category": "stainless",
+      "subcategory": "martensitic",
+      "composition_wt": {
+        "Fe": 0.8,
+        "Cr": 0.17,
+        "C": 0.011,
+        "Mo": 0.005,
+        "Mn": 0.01,
+        "Si": 0.005
+      },
+      "properties": {
+        "yield_MPa": 1900,
+        "UTS_MPa": 1970,
+        "elongation_pct": 2,
+        "density_gcc": 7.68
+      },
+      "applications": [
+        "ball bearing",
+        "knife blade",
+        "surgical instrument"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "5083-H116",
+      "aliases": [
+        "AA5083",
+        "5083"
+      ],
+      "category": "aluminium",
+      "subcategory": "5xxx Mg",
+      "composition_wt": {
+        "Al": 0.944,
+        "Mg": 0.043,
+        "Mn": 0.007,
+        "Cr": 0.001,
+        "Fe": 0.004,
+        "Si": 0.001
+      },
+      "properties": {
+        "yield_MPa": 228,
+        "UTS_MPa": 317,
+        "elongation_pct": 16,
+        "density_gcc": 2.66
+      },
+      "applications": [
+        "ship hull",
+        "pressure vessel",
+        "cryogenic",
+        "LNG tank"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "6061-T6",
+      "aliases": [
+        "AA6061",
+        "6061",
+        "UNS A96061",
+        "AA6061-T6"
+      ],
+      "category": "aluminium",
+      "subcategory": "6xxx Mg-Si",
+      "composition_wt": {
+        "Al": 0.969,
+        "Mg": 0.01,
+        "Si": 0.006,
+        "Cu": 0.003,
+        "Mn": 0.0015,
+        "Cr": 0.002
+      },
+      "properties": {
+        "yield_MPa": 276,
+        "UTS_MPa": 310,
+        "elongation_pct": 12,
+        "density_gcc": 2.7,
+        "E_GPa": 69
+      },
+      "applications": [
+        "bicycle frame",
+        "structural beam",
+        "marine fitting"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "6082-T6",
+      "aliases": [
+        "AA6082",
+        "6082"
+      ],
+      "category": "aluminium",
+      "subcategory": "6xxx Mg-Si",
+      "composition_wt": {
+        "Al": 0.96,
+        "Si": 0.01,
+        "Mg": 0.009,
+        "Mn": 0.007,
+        "Fe": 0.005,
+        "Cr": 0.002,
+        "Cu": 0.001,
+        "Zn": 0.002,
+        "Ti": 0.001
+      },
+      "properties": {
+        "yield_MPa": 260,
+        "UTS_MPa": 310,
+        "elongation_pct": 10,
+        "density_gcc": 2.7
+      },
+      "applications": [
+        "bridge",
+        "crane",
+        "offshore",
+        "transport"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "7075-T6",
+      "aliases": [
+        "AA7075",
+        "7075",
+        "UNS A97075",
+        "AA7075-T6"
+      ],
+      "category": "aluminium",
+      "subcategory": "7xxx Zn",
+      "composition_wt": {
+        "Al": 0.899,
+        "Zn": 0.056,
+        "Mg": 0.025,
+        "Cu": 0.016,
+        "Cr": 0.002,
+        "Mn": 0.001,
+        "Si": 0.001
+      },
+      "properties": {
+        "yield_MPa": 503,
+        "UTS_MPa": 572,
+        "elongation_pct": 11,
+        "density_gcc": 2.81,
+        "E_GPa": 72
+      },
+      "applications": [
+        "aircraft wing spar",
+        "rock climbing gear",
+        "M16 rifle receiver"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "904L",
+      "aliases": [
+        "UNS N08904",
+        "1.4539"
+      ],
+      "category": "stainless",
+      "subcategory": "super austenitic",
+      "composition_wt": {
+        "Fe": 0.465,
+        "Cr": 0.21,
+        "Ni": 0.25,
+        "Mo": 0.045,
+        "Cu": 0.015,
+        "Mn": 0.01,
+        "Si": 0.005
+      },
+      "properties": {
+        "yield_MPa": 220,
+        "UTS_MPa": 490,
+        "density_gcc": 7.99
+      },
+      "applications": [
+        "phosphoric acid plant",
+        "seawater cooling",
+        "Rolex watch case"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "A2",
+      "aliases": [
+        "AISI A2",
+        "1.2363",
+        "SKD12"
+      ],
+      "category": "tool_steel",
+      "subcategory": "cold work",
+      "composition_wt": {
+        "Fe": 0.912,
+        "Cr": 0.052,
+        "Mo": 0.011,
+        "C": 0.01,
+        "Mn": 0.008,
+        "V": 0.003,
+        "Si": 0.003
+      },
+      "properties": {
+        "density_gcc": 7.86
+      },
+      "applications": [
+        "blanking die",
+        "punch",
+        "gauge",
+        "wood chisel"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "A356",
+      "aliases": [
+        "A356.0",
+        "AlSi7Mg"
+      ],
+      "category": "aluminium",
+      "subcategory": "cast Al-Si",
+      "composition_wt": {
+        "Al": 0.92,
+        "Si": 0.07,
+        "Mg": 0.004,
+        "Fe": 0.002,
+        "Ti": 0.002,
+        "Mn": 0.001,
+        "Cu": 0.001
+      },
+      "properties": {
+        "yield_MPa": 200,
+        "UTS_MPa": 275,
+        "elongation_pct": 6,
+        "density_gcc": 2.68
+      },
+      "applications": [
+        "wheel rim",
+        "engine block",
+        "aerospace casting"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "A36",
+      "aliases": [
+        "ASTM A36",
+        "S275"
+      ],
+      "category": "carbon_steel",
+      "subcategory": "structural",
+      "composition_wt": {
+        "Fe": 0.98,
+        "C": 0.0026,
+        "Mn": 0.01,
+        "Si": 0.004,
+        "P": 0.0004,
+        "S": 0.0005,
+        "Cu": 0.002
+      },
+      "properties": {
+        "yield_MPa": 250,
+        "UTS_MPa": 400,
+        "elongation_pct": 23,
+        "density_gcc": 7.85
+      },
+      "applications": [
+        "structural beam",
+        "bridge",
+        "building frame",
+        "plate"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AgCu28",
+      "category": "electronic",
+      "subcategory": "silver-copper alloy",
+      "composition_wt": {
+        "Ag": 0.72,
+        "Cu": 0.28
+      },
+      "aliases": [],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AISI 1045",
+      "aliases": [
+        "1045",
+        "C45",
+        "1.0503",
+        "S45C"
+      ],
+      "category": "carbon_steel",
+      "subcategory": "medium carbon",
+      "composition_wt": {
+        "Fe": 0.9835,
+        "C": 0.0045,
+        "Mn": 0.0075,
+        "Si": 0.003,
+        "P": 0.0004,
+        "S": 0.0005
+      },
+      "properties": {
+        "yield_MPa": 530,
+        "UTS_MPa": 625,
+        "elongation_pct": 16,
+        "density_gcc": 7.85
+      },
+      "applications": [
+        "shaft",
+        "gear",
+        "axle",
+        "crankshaft"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Al0.5CoCrFeNi",
+      "aliases": [
+        "Al0.5 HEA"
+      ],
+      "category": "HEA",
+      "subcategory": "FCC/BCC HEA",
+      "composition_wt": {
+        "Al": 0.1,
+        "Co": 0.225,
+        "Cr": 0.225,
+        "Fe": 0.225,
+        "Ni": 0.225
+      },
+      "properties": {
+        "yield_MPa": 400,
+        "UTS_MPa": 700,
+        "density_gcc": 7.4
+      },
+      "applications": [
+        "structural",
+        "cryogenic"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AlCoCrFeNi",
+      "aliases": [
+        "Al equiatomic HEA"
+      ],
+      "category": "HEA",
+      "subcategory": "BCC/B2 HEA",
+      "composition_wt": {
+        "Al": 0.2,
+        "Co": 0.2,
+        "Cr": 0.2,
+        "Fe": 0.2,
+        "Ni": 0.2
+      },
+      "properties": {
+        "yield_MPa": 1350,
+        "UTS_MPa": 1480,
+        "density_gcc": 6.67,
+        "VEC": 7.2
+      },
+      "applications": [
+        "high strength structural",
+        "wear resistant"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AlSi1",
+      "category": "electronic",
+      "subcategory": "conductive aluminium alloy",
+      "composition_wt": {
+        "Al": 0.99,
+        "Si": 0.01
+      },
+      "aliases": [],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AM60B",
+      "aliases": [
+        "AM60"
+      ],
+      "category": "magnesium",
+      "subcategory": "die cast",
+      "composition_wt": {
+        "Mg": 0.94,
+        "Al": 0.06
+      },
+      "properties": {
+        "yield_MPa": 130,
+        "UTS_MPa": 220,
+        "elongation_pct": 8,
+        "density_gcc": 1.79
+      },
+      "applications": [
+        "steering wheel",
+        "seat frame",
+        "instrument panel"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AuSn80",
+      "category": "electronic",
+      "subcategory": "eutectic solder",
+      "composition_wt": {
+        "Au": 0.8,
+        "Sn": 0.2
+      },
+      "aliases": [
+        "80Au20Sn"
+      ],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AZ31B",
+      "aliases": [
+        "AZ31",
+        "UNS M11311"
+      ],
+      "category": "magnesium",
+      "subcategory": "wrought",
+      "composition_wt": {
+        "Mg": 0.96,
+        "Al": 0.03,
+        "Zn": 0.01
+      },
+      "properties": {
+        "yield_MPa": 150,
+        "UTS_MPa": 255,
+        "elongation_pct": 15,
+        "density_gcc": 1.77
+      },
+      "applications": [
+        "automotive panel",
+        "laptop casing",
+        "UAV structure"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "AZ91D",
+      "aliases": [
+        "AZ91",
+        "UNS M11916"
+      ],
+      "category": "magnesium",
+      "subcategory": "die cast",
+      "composition_wt": {
+        "Mg": 0.9,
+        "Al": 0.09,
+        "Zn": 0.007,
+        "Mn": 0.003
+      },
+      "properties": {
+        "yield_MPa": 150,
+        "UTS_MPa": 230,
+        "elongation_pct": 3,
+        "density_gcc": 1.81
+      },
+      "applications": [
+        "automotive housing",
+        "power tool",
+        "laptop casing"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Beta-21S",
+      "aliases": [
+        "Ti-15Mo-2.7Nb-3Al",
+        "Beta 21S"
+      ],
+      "category": "titanium",
+      "subcategory": "beta",
+      "composition_wt": {
+        "Ti": 0.79,
+        "Mo": 0.15,
+        "Nb": 0.027,
+        "Al": 0.03,
+        "Si": 0.002
+      },
+      "properties": {
+        "yield_MPa": 1000,
+        "UTS_MPa": 1100,
+        "density_gcc": 4.94
+      },
+      "applications": [
+        "exhaust nozzle",
+        "honeycomb",
+        "aerospace fastener"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "C17200",
+      "aliases": [
+        "BeCu",
+        "Beryllium Copper",
+        "UNS C17200"
+      ],
+      "category": "copper",
+      "subcategory": "beryllium copper",
+      "composition_wt": {
+        "Cu": 0.977,
+        "Be": 0.019,
+        "Co": 0.004
+      },
+      "properties": {
+        "yield_MPa": 1035,
+        "UTS_MPa": 1380,
+        "elongation_pct": 3,
+        "density_gcc": 8.25
+      },
+      "applications": [
+        "spring",
+        "connector",
+        "non-sparking tool",
+        "mold insert"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "C26000",
+      "aliases": [
+        "Cartridge Brass",
+        "70-30 brass",
+        "CuZn30"
+      ],
+      "category": "copper",
+      "subcategory": "brass",
+      "composition_wt": {
+        "Cu": 0.7,
+        "Zn": 0.3
+      },
+      "properties": {
+        "yield_MPa": 110,
+        "UTS_MPa": 340,
+        "elongation_pct": 63,
+        "density_gcc": 8.53
+      },
+      "applications": [
+        "ammunition cartridge",
+        "lamp fitting",
+        "radiator core"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "C36000",
+      "aliases": [
+        "Free-cutting brass",
+        "CuZn36Pb3",
+        "UNS C36000"
+      ],
+      "category": "copper",
+      "subcategory": "free-cutting brass",
+      "composition_wt": {
+        "Cu": 0.615,
+        "Zn": 0.35,
+        "Pb": 0.035
+      },
+      "properties": {
+        "yield_MPa": 124,
+        "UTS_MPa": 338,
+        "elongation_pct": 53,
+        "density_gcc": 8.5
+      },
+      "applications": [
+        "screw machine part",
+        "valve",
+        "fitting",
+        "gear"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "C71500",
+      "aliases": [
+        "Cu-30Ni",
+        "70-30 CuNi",
+        "UNS C71500"
+      ],
+      "category": "copper",
+      "subcategory": "cupronickel",
+      "composition_wt": {
+        "Cu": 0.7,
+        "Ni": 0.3
+      },
+      "properties": {
+        "yield_MPa": 170,
+        "UTS_MPa": 400,
+        "elongation_pct": 36,
+        "density_gcc": 8.94
+      },
+      "applications": [
+        "seawater piping",
+        "condenser tube",
+        "desalination"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "C95400",
+      "aliases": [
+        "Al Bronze",
+        "aluminium bronze"
+      ],
+      "category": "copper",
+      "subcategory": "aluminium bronze",
+      "composition_wt": {
+        "Cu": 0.86,
+        "Al": 0.11,
+        "Fe": 0.03
+      },
+      "properties": {
+        "yield_MPa": 240,
+        "UTS_MPa": 585,
+        "elongation_pct": 12,
+        "density_gcc": 7.45
+      },
+      "applications": [
+        "marine propeller",
+        "pump impeller",
+        "valve body"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "CM247LC",
+      "aliases": [],
+      "category": "superalloy",
+      "subcategory": "single crystal",
+      "composition_wt": {
+        "Ni": 0.59,
+        "Cr": 0.082,
+        "Co": 0.094,
+        "W": 0.095,
+        "Al": 0.056,
+        "Ta": 0.03,
+        "Hf": 0.015,
+        "Mo": 0.005,
+        "C": 0.0007,
+        "B": 0.0003
+      },
+      "properties": {
+        "density_gcc": 8.54,
+        "max_service_T_K": 1323
+      },
+      "applications": [
+        "single crystal turbine blade",
+        "power gen",
+        "aerospace HPT"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "CoCrFeMnNi",
+      "aliases": [
+        "Cantor",
+        "Cantor alloy",
+        "equiatomic CoCrFeMnNi"
+      ],
+      "category": "HEA",
+      "subcategory": "Cantor alloy",
+      "composition_wt": {
+        "Co": 0.2,
+        "Cr": 0.2,
+        "Fe": 0.2,
+        "Mn": 0.2,
+        "Ni": 0.2
+      },
+      "properties": {
+        "yield_MPa": 125,
+        "UTS_MPa": 450,
+        "elongation_pct": 65,
+        "density_gcc": 8.05,
+        "delta_pct": 1.12,
+        "VEC": 8.0
+      },
+      "applications": [
+        "cryogenic structural",
+        "research benchmark"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "CP-Ti Grade 2",
+      "aliases": [
+        "Grade 2",
+        "CP Ti",
+        "UNS R50400"
+      ],
+      "category": "titanium",
+      "subcategory": "commercially pure",
+      "composition_wt": {
+        "Ti": 0.995,
+        "Fe": 0.003,
+        "O": 0.002
+      },
+      "properties": {
+        "yield_MPa": 275,
+        "UTS_MPa": 345,
+        "elongation_pct": 20,
+        "density_gcc": 4.51
+      },
+      "applications": [
+        "chemical plant",
+        "marine heat exchanger",
+        "prosthetic"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "CuAg1",
+      "category": "electronic",
+      "subcategory": "conductive copper alloy",
+      "composition_wt": {
+        "Cu": 0.99,
+        "Ag": 0.01
+      },
+      "aliases": [],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "CuNi70-30",
+      "category": "copper",
+      "subcategory": "cupronickel",
+      "composition_wt": {
+        "Cu": 0.7,
+        "Ni": 0.3
+      },
+      "aliases": [
+        "70-30 cupronickel"
+      ],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "CuSn2",
+      "category": "electronic",
+      "subcategory": "conductive copper alloy",
+      "composition_wt": {
+        "Cu": 0.98,
+        "Sn": 0.02
+      },
+      "aliases": [],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "D2",
+      "aliases": [
+        "AISI D2",
+        "1.2379",
+        "SKD11"
+      ],
+      "category": "tool_steel",
+      "subcategory": "cold work",
+      "composition_wt": {
+        "Fe": 0.852,
+        "Cr": 0.12,
+        "C": 0.015,
+        "Mo": 0.01,
+        "V": 0.01
+      },
+      "properties": {
+        "density_gcc": 7.7
+      },
+      "applications": [
+        "blanking die",
+        "stamping die",
+        "thread rolling die"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "E110",
+      "aliases": [
+        "Alloy E110"
+      ],
+      "category": "nuclear",
+      "subcategory": "cladding",
+      "composition_wt": {
+        "Zr": 0.99,
+        "Nb": 0.01
+      },
+      "properties": {
+        "density_gcc": 6.52,
+        "neutron_xs_b": 0.19
+      },
+      "applications": [
+        "VVER fuel cladding",
+        "pressure tube"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "FieldMetal",
+      "category": "fusible",
+      "subcategory": "low-melting alloy",
+      "composition_wt": {
+        "Bi": 0.325,
+        "In": 0.51,
+        "Sn": 0.165
+      },
+      "aliases": [
+        "Field's metal"
+      ],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Galinstan",
+      "category": "fusible",
+      "subcategory": "liquid metal",
+      "composition_wt": {
+        "Ga": 0.685,
+        "In": 0.215,
+        "Sn": 0.1
+      },
+      "aliases": [],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "H13",
+      "aliases": [
+        "AISI H13",
+        "1.2344",
+        "SKD61"
+      ],
+      "category": "tool_steel",
+      "subcategory": "hot work",
+      "composition_wt": {
+        "Fe": 0.913,
+        "Cr": 0.052,
+        "Mo": 0.013,
+        "V": 0.01,
+        "Si": 0.01,
+        "C": 0.004
+      },
+      "properties": {
+        "yield_MPa": 1380,
+        "UTS_MPa": 1590,
+        "density_gcc": 7.8
+      },
+      "applications": [
+        "die casting die",
+        "extrusion die",
+        "forging tooling"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Hastelloy C276",
+      "aliases": [
+        "C276",
+        "Alloy C-276",
+        "UNS N10276",
+        "2.4819"
+      ],
+      "category": "superalloy",
+      "subcategory": "solid solution",
+      "composition_wt": {
+        "Ni": 0.57,
+        "Mo": 0.16,
+        "Cr": 0.155,
+        "Fe": 0.055,
+        "W": 0.04,
+        "Co": 0.025
+      },
+      "properties": {
+        "yield_MPa": 355,
+        "UTS_MPa": 786,
+        "elongation_pct": 60,
+        "density_gcc": 8.89
+      },
+      "applications": [
+        "chemical reactor",
+        "pollution control",
+        "flue gas scrubber"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Haynes 188",
+      "aliases": [
+        "188",
+        "UNS R30188"
+      ],
+      "category": "cobalt",
+      "subcategory": "solid solution",
+      "composition_wt": {
+        "Co": 0.39,
+        "Ni": 0.22,
+        "Cr": 0.22,
+        "W": 0.14,
+        "Fe": 0.015,
+        "La": 0.0003,
+        "C": 0.001,
+        "Mn": 0.01
+      },
+      "properties": {
+        "yield_MPa": 455,
+        "UTS_MPa": 950,
+        "density_gcc": 8.98
+      },
+      "applications": [
+        "combustor",
+        "transition duct",
+        "afterburner"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Haynes 230",
+      "aliases": [
+        "230",
+        "UNS N06230",
+        "2.4733"
+      ],
+      "category": "superalloy",
+      "subcategory": "solid solution",
+      "composition_wt": {
+        "Ni": 0.57,
+        "Cr": 0.22,
+        "W": 0.14,
+        "Mo": 0.02,
+        "Fe": 0.015,
+        "Co": 0.025,
+        "Al": 0.003,
+        "C": 0.001,
+        "La": 0.0002
+      },
+      "properties": {
+        "yield_MPa": 390,
+        "UTS_MPa": 860,
+        "density_gcc": 8.97
+      },
+      "applications": [
+        "combustion can",
+        "transition duct",
+        "industrial furnace"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Haynes 25",
+      "aliases": [
+        "L-605",
+        "UNS R30605"
+      ],
+      "category": "cobalt",
+      "subcategory": "solid solution",
+      "composition_wt": {
+        "Co": 0.5,
+        "Cr": 0.2,
+        "W": 0.15,
+        "Ni": 0.1,
+        "Fe": 0.03,
+        "C": 0.01,
+        "Mn": 0.01
+      },
+      "properties": {
+        "yield_MPa": 445,
+        "UTS_MPa": 1000,
+        "density_gcc": 9.13
+      },
+      "applications": [
+        "gas turbine combustor",
+        "heart valve spring"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "HfNbTaTiZr",
+      "aliases": [
+        "Senkov RHEA"
+      ],
+      "category": "HEA",
+      "subcategory": "refractory HEA",
+      "composition_wt": {
+        "Hf": 0.2,
+        "Nb": 0.2,
+        "Ta": 0.2,
+        "Ti": 0.2,
+        "Zr": 0.2
+      },
+      "properties": {
+        "density_gcc": 9.94
+      },
+      "applications": [
+        "high temperature structural",
+        "nuclear"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "In52Sn48",
+      "category": "fusible",
+      "subcategory": "indium solder",
+      "composition_wt": {
+        "In": 0.52,
+        "Sn": 0.48
+      },
+      "aliases": [],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "IN625",
+      "aliases": [
+        "Inconel 625",
+        "Alloy 625",
+        "UNS N06625",
+        "2.4856"
+      ],
+      "category": "superalloy",
+      "subcategory": "solid solution",
+      "composition_wt": {
+        "Ni": 0.614,
+        "Cr": 0.215,
+        "Mo": 0.09,
+        "Fe": 0.03,
+        "Nb": 0.035,
+        "Al": 0.004,
+        "Ti": 0.002,
+        "C": 0.0005,
+        "Mn": 0.002,
+        "Si": 0.001
+      },
+      "properties": {
+        "yield_MPa": 414,
+        "UTS_MPa": 827,
+        "elongation_pct": 50,
+        "density_gcc": 8.44,
+        "Tm_K": 1623
+      },
+      "applications": [
+        "chemical processing",
+        "submarine exhaust",
+        "aerospace ducting"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "IN706",
+      "aliases": [
+        "Inconel 706",
+        "Alloy 706",
+        "UNS N09706"
+      ],
+      "category": "superalloy",
+      "subcategory": "precipitation hardening",
+      "composition_wt": {
+        "Ni": 0.415,
+        "Fe": 0.37,
+        "Cr": 0.16,
+        "Nb": 0.03,
+        "Ti": 0.017,
+        "Al": 0.002,
+        "Mn": 0.002,
+        "Si": 0.002,
+        "C": 0.001
+      },
+      "properties": {
+        "yield_MPa": 1000,
+        "UTS_MPa": 1310,
+        "density_gcc": 8.05
+      },
+      "applications": [
+        "gas turbine disc",
+        "large forging",
+        "power gen rotor"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "IN718",
+      "aliases": [
+        "Inconel 718",
+        "Alloy 718",
+        "UNS N07718",
+        "2.4668"
+      ],
+      "category": "superalloy",
+      "subcategory": "precipitation hardening",
+      "composition_wt": {
+        "Ni": 0.525,
+        "Cr": 0.19,
+        "Fe": 0.185,
+        "Nb": 0.052,
+        "Mo": 0.03,
+        "Al": 0.005,
+        "Ti": 0.009,
+        "Co": 0.004
+      },
+      "properties": {
+        "yield_MPa": 1035,
+        "UTS_MPa": 1240,
+        "elongation_pct": 12,
+        "density_gcc": 8.19,
+        "Tm_K": 1609,
+        "max_service_T_K": 923
+      },
+      "applications": [
+        "gas turbine disc",
+        "rocket motor",
+        "cryogenic tank",
+        "nuclear fuel spacer"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "M2",
+      "aliases": [
+        "HSS M2",
+        "1.3343",
+        "SKH51"
+      ],
+      "category": "tool_steel",
+      "subcategory": "high speed",
+      "composition_wt": {
+        "Fe": 0.82,
+        "W": 0.063,
+        "Mo": 0.05,
+        "Cr": 0.042,
+        "V": 0.019,
+        "C": 0.009
+      },
+      "properties": {
+        "yield_MPa": null,
+        "UTS_MPa": null,
+        "density_gcc": 8.16
+      },
+      "applications": [
+        "drill bit",
+        "tap",
+        "milling cutter",
+        "saw blade"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Mar-M247",
+      "aliases": [
+        "MarM247",
+        "MAR-M 247"
+      ],
+      "category": "superalloy",
+      "subcategory": "cast",
+      "composition_wt": {
+        "Ni": 0.595,
+        "Cr": 0.084,
+        "Co": 0.1,
+        "W": 0.1,
+        "Al": 0.055,
+        "Ta": 0.03,
+        "Hf": 0.015,
+        "Mo": 0.007,
+        "Ti": 0.01,
+        "C": 0.0015,
+        "B": 0.0003,
+        "Zr": 0.0005
+      },
+      "properties": {
+        "density_gcc": 8.53,
+        "max_service_T_K": 1323
+      },
+      "applications": [
+        "turbine blade",
+        "integral wheel",
+        "power gen"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "MoNbTaVW",
+      "aliases": [],
+      "category": "HEA",
+      "subcategory": "refractory HEA",
+      "composition_wt": {
+        "Mo": 0.2,
+        "Nb": 0.2,
+        "Ta": 0.2,
+        "V": 0.2,
+        "W": 0.2
+      },
+      "properties": {
+        "density_gcc": 12.36
+      },
+      "applications": [
+        "ultra high temperature"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "MP35N",
+      "aliases": [
+        "UNS R30035"
+      ],
+      "category": "cobalt",
+      "subcategory": "multiphase",
+      "composition_wt": {
+        "Co": 0.35,
+        "Ni": 0.35,
+        "Cr": 0.2,
+        "Mo": 0.1
+      },
+      "properties": {
+        "yield_MPa": 1520,
+        "UTS_MPa": 1860,
+        "elongation_pct": 8,
+        "density_gcc": 8.43
+      },
+      "applications": [
+        "fastener",
+        "implant wire",
+        "subsea bolt",
+        "spring"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "NbMoTaW",
+      "aliases": [
+        "RMPEA",
+        "refractory MPEA"
+      ],
+      "category": "refractory",
+      "subcategory": "refractory HEA",
+      "composition_wt": {
+        "Nb": 0.25,
+        "Mo": 0.25,
+        "Ta": 0.25,
+        "W": 0.25
+      },
+      "properties": {
+        "density_gcc": 13.75,
+        "Tm_K": 3073
+      },
+      "applications": [
+        "ultra high temperature",
+        "HIP tooling"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Nimonic 80A",
+      "aliases": [
+        "Nimonic80A",
+        "UNS N07080"
+      ],
+      "category": "superalloy",
+      "subcategory": "precipitation hardening",
+      "composition_wt": {
+        "Ni": 0.73,
+        "Cr": 0.2,
+        "Ti": 0.025,
+        "Al": 0.014,
+        "Fe": 0.015,
+        "Co": 0.01,
+        "C": 0.001,
+        "Mn": 0.005
+      },
+      "properties": {
+        "yield_MPa": 620,
+        "UTS_MPa": 1000,
+        "density_gcc": 8.19
+      },
+      "applications": [
+        "exhaust valve",
+        "gas turbine ring",
+        "bolt"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Rene 41",
+      "aliases": [
+        "Ren\u00e9 41",
+        "UNS N07041"
+      ],
+      "category": "superalloy",
+      "subcategory": "precipitation hardening",
+      "composition_wt": {
+        "Ni": 0.55,
+        "Cr": 0.19,
+        "Co": 0.11,
+        "Mo": 0.1,
+        "Al": 0.015,
+        "Ti": 0.031,
+        "Fe": 0.005
+      },
+      "properties": {
+        "yield_MPa": 760,
+        "UTS_MPa": 1100,
+        "density_gcc": 8.25
+      },
+      "applications": [
+        "afterburner",
+        "exhaust nozzle",
+        "turbine ring"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "RoseMetal",
+      "category": "fusible",
+      "subcategory": "low-melting alloy",
+      "composition_wt": {
+        "Bi": 0.5,
+        "Pb": 0.28,
+        "Sn": 0.22
+      },
+      "aliases": [
+        "Rose's metal"
+      ],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "S7",
+      "aliases": [
+        "AISI S7"
+      ],
+      "category": "tool_steel",
+      "subcategory": "shock resistant",
+      "composition_wt": {
+        "Fe": 0.93,
+        "Cr": 0.033,
+        "Mo": 0.014,
+        "C": 0.005,
+        "Mn": 0.007,
+        "Si": 0.01,
+        "V": 0.003
+      },
+      "properties": {
+        "density_gcc": 7.83
+      },
+      "applications": [
+        "chisel",
+        "pneumatic tool",
+        "punch",
+        "shear blade"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "SAC305",
+      "category": "fusible",
+      "subcategory": "lead-free solder",
+      "composition_wt": {
+        "Sn": 0.965,
+        "Ag": 0.03,
+        "Cu": 0.005
+      },
+      "aliases": [],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Sn58Bi",
+      "category": "fusible",
+      "subcategory": "low-temperature solder",
+      "composition_wt": {
+        "Sn": 0.42,
+        "Bi": 0.58
+      },
+      "aliases": [
+        "Bi58Sn42"
+      ],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Sn63Pb37",
+      "category": "fusible",
+      "subcategory": "eutectic solder",
+      "composition_wt": {
+        "Sn": 0.63,
+        "Pb": 0.37
+      },
+      "aliases": [
+        "63Sn37Pb"
+      ],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Stellite 6",
+      "aliases": [
+        "Stellite6",
+        "Haynes 6"
+      ],
+      "category": "cobalt",
+      "subcategory": "wear resistant",
+      "composition_wt": {
+        "Co": 0.6,
+        "Cr": 0.28,
+        "W": 0.04,
+        "C": 0.012,
+        "Ni": 0.025,
+        "Fe": 0.015,
+        "Si": 0.008,
+        "Mn": 0.01
+      },
+      "properties": {
+        "density_gcc": 8.39
+      },
+      "applications": [
+        "valve seat",
+        "pump sleeve",
+        "hot wire guide"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Ti-15V-3Cr-3Sn-3Al",
+      "aliases": [
+        "Ti-15-3",
+        "Beta alloy",
+        "Ti-15V-3Cr"
+      ],
+      "category": "titanium",
+      "subcategory": "beta",
+      "composition_wt": {
+        "Ti": 0.76,
+        "V": 0.15,
+        "Cr": 0.03,
+        "Sn": 0.03,
+        "Al": 0.03
+      },
+      "properties": {
+        "yield_MPa": 1100,
+        "UTS_MPa": 1170,
+        "density_gcc": 4.76
+      },
+      "applications": [
+        "aerospace spring",
+        "hydraulic tubing"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Ti-3Al-2.5V",
+      "aliases": [
+        "Ti-3-2.5",
+        "Grade 9",
+        "UNS R56320"
+      ],
+      "category": "titanium",
+      "subcategory": "near-alpha",
+      "composition_wt": {
+        "Ti": 0.945,
+        "Al": 0.03,
+        "V": 0.025
+      },
+      "properties": {
+        "yield_MPa": 620,
+        "UTS_MPa": 690,
+        "elongation_pct": 15,
+        "density_gcc": 4.48
+      },
+      "applications": [
+        "hydraulic tubing",
+        "bicycle frame",
+        "tennis racket"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Ti-5Al-2.5Sn",
+      "aliases": [
+        "Ti-5-2.5",
+        "Grade 6",
+        "UNS R54520"
+      ],
+      "category": "titanium",
+      "subcategory": "near-alpha",
+      "composition_wt": {
+        "Ti": 0.925,
+        "Al": 0.05,
+        "Sn": 0.025
+      },
+      "properties": {
+        "yield_MPa": 827,
+        "UTS_MPa": 862,
+        "elongation_pct": 10,
+        "density_gcc": 4.48
+      },
+      "applications": [
+        "cryogenic vessel",
+        "aircraft frame",
+        "chemical plant"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Ti-6Al-2Sn-4Zr-2Mo",
+      "aliases": [
+        "Ti-6242",
+        "Ti-6242S"
+      ],
+      "category": "titanium",
+      "subcategory": "near-alpha",
+      "composition_wt": {
+        "Ti": 0.88,
+        "Al": 0.06,
+        "Zr": 0.02,
+        "Sn": 0.02,
+        "Mo": 0.02
+      },
+      "properties": {
+        "yield_MPa": 917,
+        "UTS_MPa": 1000,
+        "density_gcc": 4.54,
+        "max_service_T_K": 813
+      },
+      "applications": [
+        "compressor disc",
+        "high temperature aero"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Ti-6Al-4V",
+      "aliases": [
+        "Ti64",
+        "TC4",
+        "Grade 5",
+        "UNS R56400",
+        "3.7164"
+      ],
+      "category": "titanium",
+      "subcategory": "alpha-beta",
+      "composition_wt": {
+        "Ti": 0.9,
+        "Al": 0.06,
+        "V": 0.04
+      },
+      "properties": {
+        "yield_MPa": 880,
+        "UTS_MPa": 950,
+        "elongation_pct": 14,
+        "density_gcc": 4.43,
+        "Tm_K": 1933,
+        "E_GPa": 114
+      },
+      "applications": [
+        "aerospace structural",
+        "hip implant",
+        "compressor blade",
+        "racing car"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "TiZrNbMoV",
+      "aliases": [
+        "refractory HEA"
+      ],
+      "category": "HEA",
+      "subcategory": "refractory HEA",
+      "composition_wt": {
+        "Ti": 0.2,
+        "Zr": 0.2,
+        "Nb": 0.2,
+        "Mo": 0.2,
+        "V": 0.2
+      },
+      "properties": {
+        "density_gcc": 7.15
+      },
+      "applications": [
+        "high temperature structural"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "W1",
+      "aliases": [
+        "AISI W1",
+        "1.1545",
+        "SK3"
+      ],
+      "category": "tool_steel",
+      "subcategory": "water hardening",
+      "composition_wt": {
+        "Fe": 0.985,
+        "C": 0.01,
+        "Mn": 0.002,
+        "Si": 0.002
+      },
+      "properties": {
+        "density_gcc": 7.85
+      },
+      "applications": [
+        "cold heading die",
+        "drill",
+        "tap",
+        "file"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Waspaloy",
+      "aliases": [
+        "UNS N07001"
+      ],
+      "category": "superalloy",
+      "subcategory": "precipitation hardening",
+      "composition_wt": {
+        "Ni": 0.575,
+        "Cr": 0.19,
+        "Co": 0.135,
+        "Mo": 0.043,
+        "Al": 0.014,
+        "Ti": 0.03,
+        "Fe": 0.003,
+        "B": 0.0005,
+        "Zr": 0.0005
+      },
+      "properties": {
+        "yield_MPa": 795,
+        "UTS_MPa": 1275,
+        "density_gcc": 8.19,
+        "max_service_T_K": 1033
+      },
+      "applications": [
+        "turbine blade",
+        "compressor disc",
+        "jet engine case"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "WE43",
+      "aliases": [
+        "UNS M18430"
+      ],
+      "category": "magnesium",
+      "subcategory": "rare earth",
+      "composition_wt": {
+        "Mg": 0.948,
+        "Y": 0.04,
+        "Zr": 0.004,
+        "Nd": 0.008
+      },
+      "properties": {
+        "yield_MPa": 195,
+        "UTS_MPa": 285,
+        "density_gcc": 1.84
+      },
+      "applications": [
+        "helicopter gearbox",
+        "bioabsorbable implant"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "WoodMetal",
+      "category": "fusible",
+      "subcategory": "low-melting alloy",
+      "composition_wt": {
+        "Bi": 0.5,
+        "Pb": 0.26,
+        "Sn": 0.13,
+        "Cd": 0.11
+      },
+      "aliases": [
+        "Wood's metal"
+      ],
+      "properties": {},
+      "applications": [],
+      "tags": [
+        "seed_alloy",
+        "legacy_seed_prior"
+      ],
+      "provenance": {
+        "source": "AIDE legacy generator seed library",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Zircaloy-2",
+      "aliases": [
+        "Zry-2",
+        "Zircaloy 2"
+      ],
+      "category": "nuclear",
+      "subcategory": "cladding",
+      "composition_wt": {
+        "Zr": 0.981,
+        "Sn": 0.015,
+        "Fe": 0.001,
+        "Cr": 0.001,
+        "Ni": 0.001,
+        "O": 0.001
+      },
+      "properties": {
+        "density_gcc": 6.55,
+        "neutron_xs_b": 0.18
+      },
+      "applications": [
+        "BWR fuel cladding"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "Zircaloy-4",
+      "aliases": [
+        "Zry-4",
+        "Zircaloy 4"
+      ],
+      "category": "nuclear",
+      "subcategory": "cladding",
+      "composition_wt": {
+        "Zr": 0.981,
+        "Sn": 0.015,
+        "Fe": 0.002,
+        "Cr": 0.001,
+        "O": 0.001
+      },
+      "properties": {
+        "yield_MPa": 380,
+        "UTS_MPa": 510,
+        "density_gcc": 6.56,
+        "Tm_K": 2125,
+        "neutron_xs_b": 0.18
+      },
+      "applications": [
+        "PWR fuel cladding",
+        "BWR fuel channel"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "ZIRLO",
+      "aliases": [
+        "Zirlo"
+      ],
+      "category": "nuclear",
+      "subcategory": "cladding",
+      "composition_wt": {
+        "Zr": 0.979,
+        "Nb": 0.01,
+        "Sn": 0.01,
+        "Fe": 0.001
+      },
+      "properties": {
+        "density_gcc": 6.55,
+        "neutron_xs_b": 0.2
+      },
+      "applications": [
+        "PWR fuel cladding",
+        "advanced cladding"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    },
+    {
+      "key": "ZK60A",
+      "aliases": [
+        "ZK60"
+      ],
+      "category": "magnesium",
+      "subcategory": "wrought",
+      "composition_wt": {
+        "Mg": 0.94,
+        "Zn": 0.055,
+        "Zr": 0.005
+      },
+      "properties": {
+        "yield_MPa": 260,
+        "UTS_MPa": 340,
+        "elongation_pct": 11,
+        "density_gcc": 1.83
+      },
+      "applications": [
+        "forging",
+        "extrusion",
+        "bicycle frame"
+      ],
+      "tags": [
+        "seed_alloy"
+      ],
+      "provenance": {
+        "source": "AIDE legacy catalog",
+        "year": null,
+        "confidence": "low"
+      }
+    }
+  ]
+}

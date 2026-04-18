@@ -210,8 +210,34 @@ class Check:
     formula:   str = ""
 
     @property
+    def is_unavailable(self) -> bool:
+        if self.status != "INFO":
+            return False
+        msg = (self.message or "").lower()
+        unavailable_markers = (
+            "unavailable",
+            "insufficient",
+            "not available",
+            "no ",
+            "undefined",
+            "cannot",
+            "missing",
+            "error",
+            "inactive",
+        )
+        return self.value is None or any(marker in msg for marker in unavailable_markers)
+
+    @property
     def score(self) -> float:
-        return {"PASS": 1.0, "WARN": 0.6, "FAIL": 0.0, "INFO": 1.0}.get(self.status, 0.5)
+        if self.status == "PASS":
+            return 1.0
+        if self.status == "WARN":
+            return 0.55
+        if self.status == "FAIL":
+            return 0.0
+        if self.status == "INFO":
+            return 0.20 if self.is_unavailable else 0.55
+        return 0.5
 
 
 def PASS(name, value, unit, msg, citation, formula="") -> Check:
@@ -236,9 +262,9 @@ class DomainResult:
 
     def score(self) -> float:
         if not self.checks:
-            return 50.0
+            return 35.0
         s = sum(c.score for c in self.checks)
-        return 100.0 * s / len(self.checks)
+        return round(100.0 * s / len(self.checks), 2)
 
     @property
     def n_pass(self): return sum(1 for c in self.checks if c.status == "PASS")

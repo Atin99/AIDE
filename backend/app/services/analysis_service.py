@@ -28,7 +28,8 @@ def _load_env() -> None:
 
 _load_env()
 
-from core.alloy_db import ALLOY_DATABASE
+from core.alloy_db import iter_by_category
+from core.alloy_db import lookup_alloy
 from core.elements import validate_composition
 from engines.modes import route
 from llms.intent_parser import classify_intent
@@ -41,14 +42,17 @@ from physics.filter import run_all
 
 def list_alloys():
     alloys = []
-    for key, data in ALLOY_DATABASE.items():
+    for entry in iter_by_category():
         alloys.append({
-            "key": key,
-            "category": data.get("category", ""),
-            "subcategory": data.get("subcategory", ""),
-            "composition_wt": data.get("composition_wt", {}),
-            "properties": data.get("properties", {}),
-            "applications": data.get("applications", []),
+            "key": entry.get("key", ""),
+            "category": entry.get("category", ""),
+            "subcategory": entry.get("subcategory", ""),
+            "composition_wt": entry.get("composition_wt", {}),
+            "properties": entry.get("properties", {}),
+            "applications": entry.get("applications", []),
+            "aliases": entry.get("aliases", []),
+            "tags": entry.get("tags", []),
+            "provenance": entry.get("provenance", {}),
         })
     return alloys
 
@@ -112,7 +116,7 @@ def run_engine(query: Optional[str], intent: Optional[Dict[str, Any]], overrides
     if payload.get("pressure_MPa") is None:
         payload["pressure_MPa"] = 0.0
     if payload.get("use_ml") is None:
-        payload["use_ml"] = False
+        payload["use_ml"] = True
 
     result = route(payload, verbose=False)
     return {"intent": payload, "result": result}
@@ -161,16 +165,7 @@ def _lookup_alloy_by_query(query: str):
     """Try to resolve a natural language query as a known alloy name."""
     if not query:
         return None
-    q = query.strip().lower()
-    # Exact match (case-insensitive)
-    for key, data in ALLOY_DATABASE.items():
-        if key.lower() == q:
-            return data
-    # Partial match
-    for key, data in ALLOY_DATABASE.items():
-        if q in key.lower() or key.lower() in q:
-            return data
-    return None
+    return lookup_alloy(query)
 
 
 def run_unified(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -220,7 +215,10 @@ def run_unified(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
             return {
                 "request_type": "alloy_lookup",
-                "matched_alloy": alloy_match.get("category", "") + " / " + alloy_match.get("subcategory", ""),
+                "matched_alloy": alloy_match.get("key", ""),
+                "matched_family": alloy_match.get("category", "") + " / " + alloy_match.get("subcategory", ""),
+                "result_type": "catalog",
+                "provenance": alloy_match.get("provenance"),
                 "intent": None,
                 **result,
             }
@@ -235,4 +233,5 @@ def run_unified(payload: Dict[str, Any]) -> Dict[str, Any]:
         "request_type": "engine_run",
         **result,
     }
+
 

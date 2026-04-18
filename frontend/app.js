@@ -1,16 +1,64 @@
 var ALLOYS = [];
 var COMPARE_LIST = [];
-var COMPARE_COLORS = ["#6366f1", "#f44336", "#4CAF50", "#FF9800", "#9C27B0", "#00BCD4", "#795548", "#607D8B"];
+var COMPARE_COLORS = ["#7ec4cf", "#e87272", "#5dd9a8", "#e8c55a", "#b8c6d0", "#8fa2b0", "#a0c4e8", "#607D8B"];
 var ELEMENTS = [
   "Fe","Cr","Ni","Mo","Mn","C","Si","Ti","Al","V",
   "W","Co","Cu","Nb","Zr","N","Ta","Hf","B","Re",
   "Sn","Zn","Mg","O","Y","Nd","P","S","Sc","La",
-  "Ce","Ga","Ge","Ag","Pt","Au","Pb","Bi","Ru","Pd"
+  "Ce","Ga","Ge","Ag","Pt","Au","Pb","Bi","Ru","Pd",
+  "In","Cd","Sb","As","Rh","Ir","Os","Gd","Sm","Ca",
+  "Na","K","Li","Be","H","F","Cl","Ba","Cs","Hg",
+  "Tl","Se","Te","Pr","Dy"
 ];
 var radarChartInstance = null;
 var barChartInstance = null;
 var compareRadarInstance = null;
 var lastPayload = null;
+
+var DOMAIN_HINTS = {
+  "Thermodynamics": "High = stable phase formation",
+  "Hume-Rothery": "High = favorable solid-solution mixing",
+  "Mechanical": "High = strong yield/UTS properties",
+  "Corrosion": "High = resistant to corrosive attack",
+  "Oxidation": "High = strong oxide-layer protection",
+  "Radiation Physics": "High = radiation damage tolerant",
+  "Weldability": "High = easy to weld without cracking",
+  "Creep": "High = resists deformation under sustained load",
+  "Fatigue & Fracture": "High = long fatigue life, crack resistant",
+  "Grain Boundary": "High = stable, clean grain boundaries",
+  "Hydrogen Embrittlement": "High = resistant to H-induced cracking",
+  "Magnetism": "High = favorable magnetic behavior",
+  "Thermal Properties": "High = good conductivity/expansion control",
+  "Regulatory & Safety": "High = compliant, non-toxic composition",
+  "Electronic Structure": "High = favorable electronic configuration",
+  "Superconductivity": "High = favorable for superconducting state",
+  "Phase Stability": "High = resists unwanted phase precipitation",
+  "Plasticity": "High = good ductility and formability",
+  "Diffusion": "High = controlled diffusion kinetics",
+  "Surface Energy": "High = favorable surface interactions",
+  "Tribology & Wear": "High = wear and friction resistant",
+  "Acoustic Properties": "High = good acoustic damping/velocity",
+  "Shape Memory": "High = strong shape-memory response",
+  "Catalysis": "High = catalytically active surface",
+  "Biocompatibility": "High = safe for biological contact",
+  "Relativistic Effects": "High = accounts for heavy-element corrections",
+  "Nuclear Fuel Compatibility": "High = compatible with nuclear fuels",
+  "Optical Properties": "High = favorable reflectance/absorption",
+  "Hydrogen Storage": "High = stores/releases H2 effectively",
+  "Structural Efficiency": "High = strong per unit weight",
+  "CALPHAD Stability": "High = thermodynamically validated phases",
+  "India Corrosion Index": "High = resistant to tropical/coastal corrosion",
+  "Transformation Kinetics": "High = predictable phase transformations",
+  "Castability": "High = easy to cast without defects",
+  "Machinability": "High = easy to machine and cut",
+  "Formability": "High = easy to press/bend/stamp",
+  "Additive Manufacturing": "High = printable with low defect risk",
+  "Heat Treatment Response": "High = responds well to heat treatment",
+  "Fracture Mechanics": "High = high fracture toughness (K_IC)",
+  "Impact Toughness": "High = absorbs impact energy well",
+  "Galvanic Compatibility": "High = low galvanic corrosion risk",
+  "Solidification": "High = clean, defect-free solidification",
+};
 
 function $(id) { return document.getElementById(id); }
 
@@ -26,7 +74,7 @@ function initApiBase() {
 }
 
 function apiBase() {
-  var value = ($("apiBase").value || "").trim().replace(/\/$/, "");
+  var value = $("apiBase").value.trim().replace(/\/$/, "");
   if (value) localStorage.setItem("aide_api_base", value);
   return value;
 }
@@ -139,12 +187,12 @@ function fmtComp(comp, top) {
 }
 
 function statusIcon(status) {
-  if (!status) return "⬜";
+  if (!status) return "[ ]";
   var s = status.toUpperCase();
-  if (s === "PASS") return "✅";
-  if (s === "WARN") return "⚠️";
-  if (s === "FAIL") return "❌";
-  return "⬜";
+  if (s === "PASS") return "[OK]";
+  if (s === "WARN") return "[!]";
+  if (s === "FAIL") return "[X]";
+  return "[ ]";
 }
 
 function statusClass(status) {
@@ -170,7 +218,7 @@ $("alloySelect").addEventListener("change", function() {
   if (props.yield_MPa) propsText.push("Yield: " + props.yield_MPa + " MPa");
   if (props.UTS_MPa) propsText.push("UTS: " + props.UTS_MPa + " MPa");
   if (props.density_gcc) propsText.push("Density: " + props.density_gcc + " g/cc");
-  info.innerHTML = '<div><strong>' + escapeHtml(alloy.key) + '</strong> — ' + escapeHtml(alloy.category) + ' / ' + escapeHtml(alloy.subcategory) + '</div>'
+  info.innerHTML = '<div><strong>' + escapeHtml(alloy.key) + '</strong> - ' + escapeHtml(alloy.category) + ' / ' + escapeHtml(alloy.subcategory) + '</div>'
     + '<div class="alloy-comp">' + escapeHtml(fmtComp(alloy.composition_wt)) + '</div>'
     + (propsText.length ? '<div class="alloy-props">' + escapeHtml(propsText.join(" | ")) + '</div>' : '')
     + (alloy.applications.length ? '<div class="alloy-props">Uses: ' + escapeHtml(alloy.applications.join(", ")) + '</div>' : '');
@@ -205,16 +253,16 @@ async function runEngine() {
     return;
   }
   setLoading("engineBtn", "engineSpinner", true);
-  $("engineSummary").innerHTML = '<div>⏳ Running pipeline… this may take 30–60 seconds</div>';
+  $("engineSummary").innerHTML = '<div>[RUN] Running full pipeline... this may take 45-90 seconds</div>';
   try {
-    var payload = await callApi("/api/v1/run", "POST", { query: query, overrides: { use_ml: false } });
+    var payload = await callApi("/api/v1/run", "POST", { query: query, overrides: { use_ml: true, n_results: 12 } });
     lastPayload = payload;
     var type = (payload.data || {}).request_type || "";
     var matched = (payload.data || {}).matched_alloy || "";
-    $("engineSummary").innerHTML = '<div>✅ Done — ' + escapeHtml(type) + (matched ? " (" + escapeHtml(matched) + ")" : "") + '</div>';
+    $("engineSummary").innerHTML = '<div>[OK] Done - ' + escapeHtml(type) + (matched ? " (" + escapeHtml(matched) + ")" : "") + '</div>';
     displayResults(payload);
   } catch (e) {
-    $("engineSummary").innerHTML = '<div class="error-line">❌ ' + escapeHtml(e.message) + '</div>';
+    $("engineSummary").innerHTML = '<div class="error-line">[X] ' + escapeHtml(e.message) + '</div>';
     showError(e.message);
   } finally {
     setLoading("engineBtn", "engineSpinner", false);
@@ -242,7 +290,7 @@ function buildElementGrid() {
     var item = document.createElement("div");
     item.className = "el-item";
     item.innerHTML = '<span class="el-symbol">' + el + '</span>'
-      + '<button type="button" class="el-btn" data-el="' + el + '" data-dir="-1">−</button>'
+      + '<button type="button" class="el-btn" data-el="' + el + '" data-dir="-1">-</button>'
       + '<input type="number" class="el-input" id="el_' + el + '" value="0.00" min="0" max="100" step="0.5" />'
       + '<button type="button" class="el-btn" data-el="' + el + '" data-dir="1">+</button>'
       + '<span class="el-unit">%</span>';
@@ -376,8 +424,8 @@ function renderCompareCharts(results) {
     data: { labels: domains.map(function(d) { return d.length > 18 ? d.substring(0, 18) : d; }), datasets: datasets },
     options: {
       responsive: true,
-      scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, color: "#8892a6", backdropColor: "transparent" }, grid: { color: "rgba(99,102,241,0.1)" }, pointLabels: { color: "#8892a6", font: { size: 9 } } } },
-      plugins: { legend: { labels: { color: "#e2e8f0", font: { size: 12 } } } },
+      scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, color: "#8c95a4", backdropColor: "transparent" }, grid: { color: "rgba(126,196,207,0.1)" }, pointLabels: { color: "#8c95a4", font: { size: 9 } } } },
+      plugins: { legend: { labels: { color: "#e8ecf2", font: { size: 12 } } } },
     },
   });
 }
@@ -390,7 +438,7 @@ function renderCompareTable(results) {
   results.forEach(function(r) { html += '<th>' + escapeHtml(r.name) + '</th>'; });
   html += '</tr></thead><tbody>';
   domains.forEach(function(d, di) {
-    html += '<tr><td>' + escapeHtml(d) + '</td>';
+    html += '<tr><td title="' + escapeHtml(DOMAIN_HINTS[d] || '') + '">' + escapeHtml(d) + '</td>';
     results.forEach(function(r) {
       var s = extractDomainScores(r.data.result, domains)[di];
       html += '<td class="' + (s >= 70 ? "score-pass" : s >= 40 ? "score-warn" : "score-fail") + '">' + s.toFixed(1) + '</td>';
@@ -407,7 +455,7 @@ function extractDomainList(result) {
   if (!result) return [];
   var domains = result.domain_results || result.domains || [];
   if (Array.isArray(domains)) return domains.map(function(d) { return d.domain_name || d.name || ""; }).filter(Boolean);
-  return Object.keys(domains);
+  return [];
 }
 
 function normalizeScore(s) {
@@ -424,7 +472,7 @@ function extractDomainScores(result, domainNames) {
     domains.forEach(function(d) { map[d.domain_name || d.name || ""] = normalizeScore(d.score); });
     return domainNames.map(function(n) { return map[n] || 0; });
   }
-  return domainNames.map(function(n) { return normalizeScore((domains[n] && domains[n].score) || 0); });
+  return domainNames.map(function() { return 0; });
 }
 
 /* ---------- Display Results ---------- */
@@ -445,7 +493,7 @@ function showMetrics(data, result) {
   var metrics = $("metricsRow");
   metrics.classList.remove("hidden");
   var cards = [];
-  cards.push({ label: "Type", value: data.request_type || "—" });
+  cards.push({ label: "Type", value: data.request_type || "--" });
   if (result.composite_score != null) cards.push({ label: "Score", value: Number(result.composite_score).toFixed(1) + "/100" });
   if (result.n_domains != null) cards.push({ label: "Domains", value: result.n_domains });
   if (result.n_pass != null) cards.push({ label: "Pass", value: result.n_pass });
@@ -468,22 +516,22 @@ function renderCharts(result) {
   if (radarChartInstance) radarChartInstance.destroy();
   radarChartInstance = new Chart($("radarChart"), {
     type: "radar",
-    data: { labels: labels, datasets: [{ label: "Score", data: scores, borderColor: "#6366f1", backgroundColor: "rgba(99,102,241,0.15)", borderWidth: 2, pointBackgroundColor: "#6366f1", pointRadius: 3 }] },
+    data: { labels: labels, datasets: [{ label: "Score", data: scores, borderColor: "#7ec4cf", backgroundColor: "rgba(126,196,207,0.15)", borderWidth: 2, pointBackgroundColor: "#7ec4cf", pointRadius: 3 }] },
     options: {
       responsive: true,
-      scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, color: "#8892a6", backdropColor: "transparent" }, grid: { color: "rgba(99,102,241,0.1)" }, pointLabels: { color: "#8892a6", font: { size: 8 } } } },
+      scales: { r: { min: 0, max: 100, ticks: { stepSize: 20, color: "#8c95a4", backdropColor: "transparent" }, grid: { color: "rgba(126,196,207,0.1)" }, pointLabels: { color: "#8c95a4", font: { size: 8 } } } },
       plugins: { legend: { display: false } },
     },
   });
 
   if (barChartInstance) barChartInstance.destroy();
-  var barColors = scores.map(function(s) { return s >= 70 ? "#34d399" : s >= 40 ? "#fbbf24" : "#f87171"; });
+  var barColors = scores.map(function(s) { return s >= 70 ? "#5dd9a8" : s >= 40 ? "#e8c55a" : "#e87272"; });
   barChartInstance = new Chart($("barChart"), {
     type: "bar",
     data: { labels: labels, datasets: [{ label: "Score", data: scores, backgroundColor: barColors, borderColor: barColors, borderWidth: 1 }] },
     options: {
       indexAxis: "y", responsive: true,
-      scales: { x: { min: 0, max: 100, ticks: { color: "#8892a6" }, grid: { color: "rgba(99,102,241,0.06)" } }, y: { ticks: { color: "#8892a6", font: { size: 9 } }, grid: { display: false } } },
+      scales: { x: { min: 0, max: 100, ticks: { color: "#8c95a4" }, grid: { color: "rgba(126,196,207,0.06)" } }, y: { ticks: { color: "#8c95a4", font: { size: 9 } }, grid: { display: false } } },
       plugins: { legend: { display: false } },
     },
   });
@@ -511,9 +559,11 @@ function renderDomainTable(result) {
 
     // Main domain row  (clickable)
     html += '<tr class="domain-row' + (hasChecks ? ' clickable' : '') + '" data-target="' + detailId + '" id="' + rowId + '">';
-    html += '<td class="expand-icon">' + (hasChecks ? '▶' : '') + '</td>';
+    html += '<td class="expand-icon">' + (hasChecks ? '>' : '') + '</td>';
     html += '<td>' + (d.domain_id || "") + '</td>';
-    html += '<td><strong>' + escapeHtml(d.domain_name || d.name || "") + '</strong></td>';
+    var domainName = d.domain_name || d.name || "";
+    var hint = DOMAIN_HINTS[domainName] || "";
+    html += '<td><strong>' + escapeHtml(domainName) + '</strong>' + (hint ? '<br><span class="domain-hint">' + escapeHtml(hint) + '</span>' : '') + '</td>';
     html += '<td class="' + cls + '">' + s.toFixed(1) + '</td>';
     html += '<td>' + (d.n_pass || 0) + '</td>';
     html += '<td>' + (d.n_warn || 0) + '</td>';
@@ -563,10 +613,10 @@ function renderDomainTable(result) {
       var icon = row.querySelector(".expand-icon");
       if (detail.classList.contains("hidden")) {
         detail.classList.remove("hidden");
-        icon.textContent = "▼";
+        icon.textContent = "v";
       } else {
         detail.classList.add("hidden");
-        icon.textContent = "▶";
+        icon.textContent = ">";
       }
     });
   });
@@ -576,19 +626,45 @@ function renderCandidatesTable(data) {
   var container = $("candidatesTable");
   var result = data.result || {};
   var top = result.top;
-  if (!top || !Array.isArray(top) || !top.length) { container.classList.add("hidden"); return; }
+  var detail = result.candidates_detail || [];
+  if ((!top || !Array.isArray(top) || !top.length) && !detail.length) { container.classList.add("hidden"); return; }
   container.classList.remove("hidden");
   var html = '<h3 style="margin: 16px 0 8px; font-size: 1rem;">Top Candidates</h3>';
-  html += '<table><thead><tr><th>#</th><th>Score</th><th>P</th><th>W</th><th>F</th><th>Composition</th></tr></thead><tbody>';
-  top.forEach(function(entry, i) {
-    var comp = entry[0] || entry.composition || {};
-    var r = entry[1] || entry.result || {};
-    html += '<tr><td>' + (i + 1) + '</td>';
-    html += '<td>' + (r.composite_score != null ? Number(r.composite_score).toFixed(1) : "?") + '</td>';
-    html += '<td>' + (r.n_pass || 0) + '</td><td>' + (r.n_warn || 0) + '</td><td>' + (r.n_fail || 0) + '</td>';
-    html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(comp, 5)) + '</td></tr>';
-  });
+  html += '<table><thead><tr><th>#</th><th>Type</th><th>Score</th><th>P</th><th>W</th><th>F</th><th>Composition</th></tr></thead><tbody>';
+
+  if (detail.length) {
+    detail.forEach(function(cd, i) {
+      var badgeCls = cd.result_type === "catalog" ? "badge-catalog" : "badge-generated";
+      var badgeText = cd.result_type === "catalog" ? "CATALOG" : "GENERATED";
+      html += '<tr><td>' + (i + 1) + '</td>';
+      html += '<td><span class="badge ' + badgeCls + '">' + badgeText + '</span></td>';
+      html += '<td>' + (cd.score != null ? Number(cd.score).toFixed(1) : "?") + '</td>';
+      html += '<td>-</td><td>-</td><td>-</td>';
+      html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(cd.composition_wt || cd.composition || {}, 5)) + '</td></tr>';
+    });
+  } else if (top) {
+    top.forEach(function(entry, i) {
+      var comp = entry[0] || entry.composition || {};
+      var r = entry[1] || entry.result || {};
+      html += '<tr><td>' + (i + 1) + '</td>';
+      html += '<td><span class="badge badge-generated">GENERATED</span></td>';
+      html += '<td>' + (r.composite_score != null ? Number(r.composite_score).toFixed(1) : "?") + '</td>';
+      html += '<td>' + (r.n_pass || 0) + '</td><td>' + (r.n_warn || 0) + '</td><td>' + (r.n_fail || 0) + '</td>';
+      html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(comp, 5)) + '</td></tr>';
+    });
+  }
+
   html += '</tbody></table>';
+
+  // Show provenance if present at root level (alloy_lookup)
+  if (data.result_type === "catalog" && data.provenance) {
+    html += '<div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">';
+    html += 'Source: ' + escapeHtml(data.provenance.source || "");
+    if (data.provenance.year) html += ' (' + data.provenance.year + ')';
+    if (data.provenance.confidence) html += ' [' + escapeHtml(data.provenance.confidence) + ']';
+    html += '</div>';
+  }
+
   container.innerHTML = html;
 }
 
@@ -618,3 +694,4 @@ initViewToggle();
 buildElementGrid();
 checkHealth();
 loadAlloys();
+

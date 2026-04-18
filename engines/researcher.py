@@ -209,6 +209,8 @@ class ApplicationResearcher:
             excludes.add("Co")
 
         base_candidates = {
+            "fusible_alloy": ["Sn", "Bi", "In", "Ga"],
+            "electronic_alloy": ["Cu", "Sn", "Al", "Ag", "Au", "Si", "Ge"],
             "stainless": ["Fe"],
             "structural": ["Fe"],
             "carbon_steel": ["Fe"],
@@ -224,6 +226,8 @@ class ApplicationResearcher:
             "general_structural": ["Fe"],
         }
         base_min = {
+            "fusible_alloy": 0.35,
+            "electronic_alloy": 0.40,
             "stainless": 0.50,
             "structural": 0.62,
             "carbon_steel": 0.92,
@@ -250,9 +254,14 @@ class ApplicationResearcher:
                 mandatory_mechanisms.append("gamma_prime")
             mandatory_mechanisms.append("solid_solution")
         if "wear_resistance" in properties or "hardness" in properties:
-            mandatory_mechanisms.append("carbide")
+            if app in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
+                mandatory_mechanisms.append("carbide")
+            else:
+                mandatory_mechanisms.append("solid_solution")
         if "high_strength" in properties and app in {"al_alloy", "ti_alloy", "superalloy"}:
             mandatory_mechanisms.append("precipitation_hard")
+        if app == "fusible_alloy":
+            mandatory_mechanisms.append("solid_solution")
 
         if app == "ti_alloy" and ("high_strength" in properties or "fatigue_resistance" in properties):
             mandatory_mechanisms.append("alpha_beta")
@@ -270,6 +279,10 @@ class ApplicationResearcher:
             primary_domains.append("Fatigue & Fracture")
         if "conductivity" in properties:
             primary_domains.extend(["Thermal Properties", "Electronic Structure"])
+        if "low_melting_point" in properties or app == "fusible_alloy":
+            primary_domains.extend(["Thermodynamics", "Thermal Properties"])
+        if app == "electronic_alloy":
+            primary_domains.extend(["Electronic Structure", "Thermal Properties"])
         if "biocompatibility" in properties or app == "biomedical":
             primary_domains.append("Biocompatibility")
         if app == "nuclear" or "radiation_resistance" in properties:
@@ -295,6 +308,10 @@ class ApplicationResearcher:
         ).validate()
 
     def _infer_application(self, q: str) -> str:
+        if any(k in q for k in ["fuse alloy", "fuse wire", "fusible", "fusible wire", "low melting", "low-melting", "solder", "solder alloy", "thermal fuse", "fusible link", "braze filler", "liquid metal"]):
+            return "fusible_alloy"
+        if any(k in q for k in ["chip alloy", "chip package", "semiconductor", "interconnect", "bond wire", "wire bond", "solder bump", "leadframe", "microelectronics", "electronic packaging"]):
+            return "electronic_alloy"
         if any(k in q for k in ["stainless", "duplex", "marine", "chloride", "pitting"]):
             return "stainless"
         if any(k in q for k in ["any alloy", "any composition", "unrestricted composition", "any elements", "no element restriction"]):
@@ -323,13 +340,14 @@ class ApplicationResearcher:
 
     def _infer_properties(self, q: str) -> list[str]:
         mapping = {
+            "low_melting_point": ["low melting", "low-melting", "fusible", "solder", "reflow", "liquid metal", "thermal fuse"],
             "corrosion_resistance": ["corrosion", "rust", "pitting", "chloride", "marine"],
             "high_temperature_strength": ["high temperature", "elevated temperature", "hot", "turbine"],
             "creep_resistance": ["creep", "stress rupture"],
             "wear_resistance": ["wear", "abrasion", "erosion", "tribology"],
             "hardness": ["hardness", "hard"],
             "fatigue_resistance": ["fatigue", "cyclic"],
-            "conductivity": ["conductivity", "electrical", "wire"],
+            "conductivity": ["conductivity", "electrical", "wire", "chip", "interconnect", "bond wire", "leadframe", "packaging"],
             "biocompatibility": ["biomedical", "implant", "biocompatible"],
             "radiation_resistance": ["radiation", "reactor", "nuclear", "dpa"],
         }
@@ -337,6 +355,16 @@ class ApplicationResearcher:
         for name, keys in mapping.items():
             if any(k in q for k in keys):
                 props.append(name)
+
+        fuse_wire_markers = ["fuse wire", "fusible wire", "fuse alloy", "fusible alloy", "thermal fuse"]
+        explicit_electrical_markers = [
+            "high conductivity", "electrical conductivity", "low resistance", "resistive heating",
+            "current rating", "ampere", "amperage", "circuit protection", "overcurrent",
+        ]
+        if any(marker in q for marker in fuse_wire_markers) and not any(marker in q for marker in explicit_electrical_markers):
+            props = [prop for prop in props if prop != "conductivity"]
+            if "low_melting_point" not in props:
+                props.append("low_melting_point")
 
         m_c = re.search(r"(\d{3,4})\s*c\b", q)
         if m_c and float(m_c.group(1)) >= 550:
@@ -348,7 +376,7 @@ class ApplicationResearcher:
         for element in candidates:
             if element not in excludes:
                 return element
-        for fallback in ["Fe", "Ti", "Al", "Zr", "Cu"]:
+        for fallback in ["Fe", "Sn", "Cu", "Ti", "Al", "Zr", "Bi"]:
             if fallback not in excludes:
                 return fallback
         return "Fe"

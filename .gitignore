@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 *.pyo
@@ -24,3 +26,6 @@ ml/AIDE_Train.ipynb
 .codex_logs/
 deploy/hf_space_bundle/
 frontend/.wrangler/
+dataset_exports/
+.vscode/
+tests/__pycache__/
