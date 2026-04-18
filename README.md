@@ -81,10 +81,7 @@ Set these in `.env`:
 - `AIDE_LOCAL_INTENT_MODEL_TRIES=3`
 
 This keeps most reasoning local while Python physics/ML scoring remains deterministic.
-
-## Free Deployment
-
-Use the runbook in `deploy/FREE_DEPLOY.md` for a free-tier setup (Hugging Face Spaces backend + Cloudflare Pages frontend).
+.
 
 ## Streamlit Mode
 
