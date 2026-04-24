@@ -23,12 +23,22 @@ PROVIDER_SPECS = [
         "name": "groq",
         "env": "GROQ_API_KEY",
         "endpoint": "https://api.groq.com/openai/v1/chat/completions",
-        "model": "llama-3.3-70b-versatile",
+        "model": "llama-3.1-8b-instant",
         "json_mode": "response_format",
     },
 ]
 EMPTY_KEY_PREFIX = "your_"
 MAX_ERROR_DETAIL_CHARS = 500
+DEFAULT_HTTP_TIMEOUT_SECONDS = max(15, int(os.environ.get("AIDE_LLM_HTTP_TIMEOUT_SECONDS", "45")))
+DEFAULT_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/123.0.0.0 Safari/537.36"
+)
+MODEL_ENV_BY_PROVIDER = {
+    "gemini": "AIDE_GEMINI_MODEL",
+    "groq": "AIDE_GROQ_MODEL",
+}
 
 _provider_cursor = 0
 
@@ -53,13 +63,29 @@ def _configured_api_key(env_name: str) -> str:
     return value
 
 
+def _configured_model(spec: dict) -> str:
+    env_name = MODEL_ENV_BY_PROVIDER.get(spec["name"])
+    if env_name:
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            return value
+    return spec["model"]
+
+
+def _remote_llm_enabled() -> bool:
+    value = os.environ.get("AIDE_ENABLE_REMOTE_LLM", "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
 def get_available_providers() -> list[dict]:
     """Return configured remote LLM providers in priority order."""
+    if not _remote_llm_enabled():
+        return []
     providers = []
     for spec in PROVIDER_SPECS:
         api_key = _configured_api_key(spec["env"])
         if api_key:
-            providers.append({**spec, "api_key": api_key})
+            providers.append({**spec, "api_key": api_key, "model": _configured_model(spec)})
     return providers
 
 
@@ -156,6 +182,51 @@ def _extract_content(response_json: dict) -> str | None:
     return None
 
 
+def _request_headers(provider: dict) -> dict[str, str]:
+    headers = {
+        "Authorization": f"Bearer {provider['api_key']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if provider["name"] == "groq":
+        headers.update(
+            {
+                "User-Agent": DEFAULT_BROWSER_USER_AGENT,
+                "Accept-Language": "en-US,en;q=0.9",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            }
+        )
+    return headers
+
+
+def _is_retriable_http(provider: dict, status_code: int, detail: str) -> bool:
+    if provider["name"] == "gemini":
+        return status_code in {408, 429, 500, 502, 503, 504}
+    if provider["name"] == "groq":
+        if status_code == 403 and "1010" in (detail or ""):
+            return False
+        return status_code in {408, 429, 500, 502, 503, 504}
+    return status_code in {408, 429, 500, 502, 503, 504}
+
+
+def _retry_delay_seconds(err: urllib.error.HTTPError, attempt: int, detail: str = "") -> float:
+    retry_after = ""
+    try:
+        retry_after = (err.headers.get("Retry-After") or "").strip()
+    except Exception:
+        retry_after = ""
+    if retry_after.isdigit():
+        return min(float(retry_after), 60.0)
+    match = re.search(r"retry in ([0-9.]+)s", detail or "", re.IGNORECASE)
+    if match:
+        try:
+            return min(float(match.group(1)), 60.0)
+        except ValueError:
+            pass
+    return min(5.0 * (2 ** attempt), 40.0)
+
+
 def _request_provider(
     provider: dict,
     messages: list[dict],
@@ -169,10 +240,7 @@ def _request_provider(
     request = urllib.request.Request(
         provider["endpoint"],
         data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {provider['api_key']}",
-            "Content-Type": "application/json",
-        },
+        headers=_request_headers(provider),
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -186,7 +254,7 @@ def chat(
     temperature: float = 0.2,
     force_json: bool = False,
     retries: int = 1,
-    timeout: int = 15,
+    timeout: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
 ) -> str | None:
     """Call Gemini first, then Groq, and return the first successful text response."""
     providers = _ordered_providers()
@@ -213,8 +281,10 @@ def chat(
                 detail = _read_http_error(err)
                 last_error = f"{provider['name']} HTTP {err.code}: {detail}"
                 logger.warning(last_error)
-                if err.code == 429:
-                    time.sleep(min(2.0 * (2 ** attempt), 20.0))
+                if _is_retriable_http(provider, err.code, detail):
+                    delay = _retry_delay_seconds(err, attempt, detail)
+                    logger.warning("[LLM] Retrying %s after %.1fs", provider["name"], delay)
+                    time.sleep(delay)
             except urllib.error.URLError as err:
                 last_error = f"{provider['name']} network error: {err}"
                 logger.warning(last_error)
@@ -274,6 +344,7 @@ def chat_json(messages: list[dict], max_tokens: int = 1500, temperature: float =
             temperature=temperature,
             force_json=True,
             retries=2,
+            timeout=DEFAULT_HTTP_TIMEOUT_SECONDS,
         )
         if not raw:
             continue

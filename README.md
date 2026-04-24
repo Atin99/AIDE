@@ -35,7 +35,7 @@ AIDE (Alloy Intelligence and Design Engine) provides alloy analysis and design w
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 300
 ```
 
 2. Run frontend:
@@ -46,6 +46,8 @@ python -m http.server 5173
 ```
 
 3. Open `http://localhost:5173` and keep API base as `http://localhost:8000`.
+
+Long-running design requests now target a 5-minute browser/API window. `--timeout-keep-alive 300` helps prevent idle connection reuse from dropping, but if you deploy behind another proxy you may also need that platform's read/request timeout set to 300 seconds.
 
 ## API Design
 
@@ -97,6 +99,8 @@ streamlit run app.py
 - `GEMINI_API_KEY`
 - `DEEPSEEK_API_KEY`
 - `GROQ_API_KEY`
+- `AIDE_GROQ_MODEL`
+- `AIDE_LLM_HTTP_TIMEOUT_SECONDS`
 - `AIDE_USE_LOCAL_LLM`
 - `AIDE_LOCAL_FIRST`
 - `AIDE_ENABLE_REMOTE_LLM`
@@ -105,6 +109,7 @@ streamlit run app.py
 - `AIDE_LOCAL_INTENT_MODELS`
 - `AIDE_LOCAL_INTENT_MODEL_TRIES`
 - `AIDE_API_CORS_ORIGINS`
+- `AIDE_PROXY_TIMEOUT_MS`
 
 ## Contributing
 

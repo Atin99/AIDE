@@ -21,6 +21,32 @@ def _convert_wt_to_mol(wt_comp):
         return validate_composition(wt_comp)
 
 
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _safe_float(value, default):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _pipeline_runtime_kwargs(intent, default_iterations):
+    max_iterations = max(1, min(5, _safe_int(intent.get("max_iterations"), default_iterations)))
+    min_iterations = max(1, min(max_iterations, _safe_int(intent.get("min_iterations"), min(2, max_iterations))))
+    return {
+        "max_iterations": max_iterations,
+        "target_score": _safe_float(intent.get("target_score"), 85.0),
+        "feedback_limit": max(1, min(5, _safe_int(intent.get("feedback_limit"), 3))),
+        "min_iterations": min_iterations,
+        "use_ml": intent.get("use_ml", False),
+    }
+
+
 class DesignEngine:
     @staticmethod
     def run(intent, verbose=False, on_step=None):
@@ -43,16 +69,19 @@ class DesignEngine:
         T_K = intent.get("temperature_K") or 298.0
         weather = intent.get("environment")
         top_n = min(intent.get("n_results") or 10, 20)
+        pipeline_kwargs = _pipeline_runtime_kwargs(intent, default_iterations=4)
         result = run_pipeline(query=query, intent=intent, on_step=on_step,
-                              max_iterations=2, T_K=T_K, weather=weather,
+                              T_K=T_K, weather=weather,
                               constraints=intent.get("constraints", {}),
                               dpa_rate=intent.get("dpa_rate", 1e-7),
                               pressure_MPa=intent.get("pressure_MPa", 0.0),
-                              use_ml=intent.get("use_ml", False))
+                              **pipeline_kwargs)
         top = []
-        for cand in result.candidates[:top_n]:
-            if cand.physics_result and "composite_score" in cand.physics_result:
+        for cand in result.candidates:
+            if cand.physics_evaluated and cand.physics_result and "composite_score" in cand.physics_result:
                 top.append((cand.composition, cand.physics_result))
+                if len(top) >= top_n:
+                    break
         return {
             "mode": "design", "top": top, "n_candidates": len(result.candidates),
             "n_generated_raw": result.generation_stats.get("raw_generated", 0),
@@ -66,14 +95,19 @@ class DesignEngine:
             "explanation": result.explanation,
             "correlation_insights": result.correlation_insights,
             "generation_stats": result.generation_stats,
+            "pipeline_config": pipeline_kwargs,
             "candidates_detail": [{"composition": c.composition,
                                    "composition_wt": c.composition_wt,
                                    "rationale": c.rationale, "score": c.score,
+                                   "screening_score": c.screening_score,
+                                   "score_source": c.score_source,
+                                   "physics_evaluated": c.physics_evaluated,
+                                   "iteration": c.iteration,
                                    "ml_predictions": c.ml_predictions,
                                    "weak_domains": c.weak_domains,
                                    "result_type": c.result_type,
                                    "provenance": c.provenance}
-                                  for c in result.candidates[:top_n]]}
+                                  for c in result.candidates]}
 
 
 class ModifyEngine:
@@ -102,10 +136,11 @@ class ModifyEngine:
         modify_intent = dict(intent)
         modify_intent["notes"] = (f"Improve {alloy_name}. Current: {_fmt_comp(comp)}. "
                                   f"Weak: {', '.join(dr.domain_name for dr in weak if dr.score() < 60)}.")
+        pipeline_kwargs = _pipeline_runtime_kwargs(modify_intent, default_iterations=3)
         result = run_pipeline(query=modify_intent["notes"], intent=modify_intent,
-                              on_step=on_step, max_iterations=3, T_K=T_K,
+                              on_step=on_step, T_K=T_K,
                               weather=intent.get("environment"),
-                              use_ml=intent.get("use_ml", False))
+                              **pipeline_kwargs)
         modifications = []
         for cand in result.candidates[:5]:
             if cand.physics_result and "composite_score" in cand.physics_result:
@@ -241,10 +276,11 @@ class ExploreEngine:
         constraints = intent.get("constraints", {})
         hub = get_hub()
         db_matches = hub.search_alloys(query)
+        pipeline_kwargs = _pipeline_runtime_kwargs(intent, default_iterations=3)
         result = run_pipeline(query=query, intent=intent, on_step=on_step,
-                              max_iterations=2, T_K=intent.get("temperature_K") or 298.0,
+                              T_K=intent.get("temperature_K") or 298.0,
                               weather=intent.get("environment"),
-                              use_ml=intent.get("use_ml", False))
+                              **pipeline_kwargs)
         passing = []
         for cand in result.candidates:
             if cand.physics_result and _passes_constraints(cand.composition, cand.physics_result, constraints):
@@ -289,8 +325,9 @@ class GeometryEngine:
                     "physics_result": physics, "engineering_result": eng}
         geo_intent = dict(intent)
         geo_intent["notes"] = f"structural alloy for {geometry.get('shape', 'plate')} under {loading}"
+        pipeline_kwargs = _pipeline_runtime_kwargs(geo_intent, default_iterations=3)
         result = run_pipeline(query=geo_intent["notes"], intent=geo_intent,
-                              on_step=on_step, max_iterations=2, T_K=T_K)
+                              on_step=on_step, T_K=T_K, **pipeline_kwargs)
         scored = []
         for cand in result.candidates[:20]:
             if cand.physics_result:

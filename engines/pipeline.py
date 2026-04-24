@@ -35,6 +35,9 @@ class Candidate:
     ml_predictions: dict = field(default_factory=dict)
     correlations: dict = field(default_factory=dict)
     score: float = 0.0
+    screening_score: float = 0.0
+    score_source: str = "unscored"
+    physics_evaluated: bool = False
     weak_domains: list = field(default_factory=list)
     iteration: int = 0
     result_type: str = "generated"
@@ -387,6 +390,13 @@ def _summarize_intent(intent, query):
     return " | ".join(notes)
 
 
+def _compact_comp(comp, top=5, digits=2):
+    if not comp:
+        return "none"
+    ranked = sorted(comp.items(), key=lambda item: (-item[1], item[0]))
+    return ", ".join(f"{sym}:{frac * 100:.{digits}f}%" for sym, frac in ranked[:top])
+
+
 class BaselinePredictor:
     @staticmethod
     def predict(query, intent):
@@ -457,8 +467,10 @@ class BaselinePredictor:
 
 def _llm_baseline(query, intent):
     from llms.client import chat_json
-    parts = [f"Given this alloy design request, propose ONE single realistic starting composition.",
-             f"Request: {query}"]
+    parts = [
+        "Propose one realistic starting alloy composition.",
+        f"Request: {query}",
+    ]
     
     rd = intent.get("research_data")
     if rd:
@@ -468,14 +480,33 @@ def _llm_baseline(query, intent):
         parts.append(f"  - Forbidden: {rd.forbidden_elements}")
         parts.append(f"  - Mechanisms to enforce: {rd.mandatory_mechanisms}")
     
-    parts.append("""Return ONLY JSON:
-{"comp_wt": {"Fe": 0.65, "Cr": 0.22}, "rationale": "why this is the best starting point"}
-Rules: weight fractions summing to ~1.0, NO forbidden elements, and base element must strictly be the highest mass.""")
+    parts.append(
+        """Return ONLY JSON:
+{"comp_wt": {"Fe": 0.650, "Cr": 0.220}, "rationale": "short baseline reason"}
+Rules:
+- weight fractions sum to ~1.0
+- max 6 elements
+- rationale <= 12 words
+- use at most 3 decimal places
+- no forbidden elements
+- base element must remain the highest mass fraction when required"""
+    )
 
     prompt = "\n".join(parts)
     result = chat_json(
-        [{"role": "system", "content": "You are an expert computational metallurgist. Return ONLY valid JSON."},
-         {"role": "user", "content": prompt}], max_tokens=500, temperature=0.1)
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You are a computational metallurgist. "
+                    "Return raw JSON only. Keep compositions realistic and compact."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=220,
+        temperature=0.1,
+    )
     
     if not result or "comp_wt" not in result:
         return None
@@ -516,7 +547,8 @@ class MultiCompositionGenerator:
         initial_len = len(candidates)
         from llms.client import is_available
         if is_available():
-            candidates.extend(_llm_generate(query, intent, baseline, n, feedback))
+            llm_target = max(3, min(8, int(math.ceil(max(1, n) / 12.0))))
+            candidates.extend(_llm_generate(query, intent, baseline, llm_target, feedback))
 
         from core.generator import generate
         try:
@@ -655,11 +687,14 @@ class MultiCompositionGenerator:
                 )
             except Exception:
                 pass
+        for cand in candidates:
+            cand.iteration = iteration
         return candidates
 
 
 def _llm_generate(query, intent, baseline, n, feedback=None):
     from llms.client import chat_json
+    target_n = max(3, min(int(n), 8))
     parts = [f"Design query: {query}"]
     if intent.get("application"): parts.append(f"Application: {intent['application']}")
     if intent.get("environment"): parts.append(f"Environment: {intent['environment']}")
@@ -677,23 +712,35 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
         parts.append(f"  - Mechanisms to enforce: {rd.mandatory_mechanisms}")
 
     if baseline:
-        comp_str = ", ".join(f"{s}:{v*100:.1f}%" for s, v in sorted(
-            baseline.composition_wt.items(), key=lambda x: -x[1])[:6])
+        comp_str = _compact_comp(baseline.composition_wt, top=6, digits=2)
         parts.append(f"\nStarting Baseline: {comp_str}")
     if feedback:
         parts.append(f"Best previous score: {feedback.get('best_score', 0):.1f}/100")
         parts.append(f"Weak domains to improve: {feedback.get('weak_summary', 'none')}")
-        
-    parts.append(f"\nPropose {n} DIVERSE alloy compositions as weight fractions summing to 1.0.")
-    parts.append("Vary chemistry families, dominant elements, minor additions, and element count. Avoid near-duplicates.")
-    parts.append("At least one-third of the candidates should be exploratory or risky and may fail some domains if they test a different mechanism.")
-    parts.append("Do not return the same top-3 element set repeatedly unless the ratios are materially different.")
-    parts.append("ALWAYS keep the base element dominant only when the application truly requires it.")
-    
-    system = ("You are an expert computational metallurgist. "
-              "Return ONLY JSON: {\"compositions\": [{\"comp_wt\": {\"Fe\": 0.65}, \"rationale\": \"...\"}]}")
-    result = chat_json([{"role": "system", "content": system},
-                        {"role": "user", "content": "\n".join(parts)}], max_tokens=2600, temperature=0.85)
+        for index, failed in enumerate(feedback.get("failure_examples") or [], start=1):
+            parts.append(
+                f"Failure {index}: score={failed.get('score', 0):.1f}; "
+                f"{failed.get('composition_summary', 'none')}; "
+                f"issue={failed.get('main_issue', 'unknown')}"
+            )
+
+    parts.append(f"\nPropose {target_n} diverse alloy compositions as weight fractions summing to 1.0.")
+    parts.append("Vary chemistry families, dominant elements, minor additions, and element count.")
+    parts.append("Avoid near-duplicates and do not repeat the same top-3 element set unless ratios materially change.")
+    parts.append("At least one candidate should test a different mechanism than the baseline.")
+    parts.append("Keep each rationale to 12 words or fewer.")
+
+    system = (
+        "You are a computational metallurgist. "
+        "Return raw JSON only in this schema: "
+        "{\"compositions\": [{\"comp_wt\": {\"Fe\": 0.650}, \"rationale\": \"short text\"}]}. "
+        "Use at most 3 decimal places and keep compositions realistic."
+    )
+    result = chat_json(
+        [{"role": "system", "content": system}, {"role": "user", "content": "\n".join(parts)}],
+        max_tokens=max(520, 140 * target_n),
+        temperature=0.75,
+    )
     
     if not result or "compositions" not in result:
         return []
@@ -718,8 +765,14 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
                     logger.debug(f"[_llm_generate] Skipping candidate - {reason}")
                     continue
                     
-            candidates.append(Candidate(composition=mol, composition_wt=wt,
-                                        rationale=item.get("rationale", "")))
+            candidates.append(
+                Candidate(
+                    composition=mol,
+                    composition_wt=wt,
+                    rationale=item.get("rationale", ""),
+                    score_source="llm_raw",
+                )
+            )
         except Exception:
             continue
     return candidates
@@ -818,7 +871,8 @@ class PhysicsMLEvaluator:
                                  domains_focus=domains_focus, dpa_rate=dpa_rate,
                                  domain_priority=priority_map)
                 cand.physics_result = result
-                
+                cand.physics_evaluated = True
+
                 base_score = result.get("composite_score", 0)
                 weak = []
                 domain_scores = {}
@@ -864,6 +918,7 @@ class PhysicsMLEvaluator:
 
                 if constraints and cand.score > 0:
                     _apply_constraints(cand, constraints)
+                cand.score_source = "physics"
                 try:
                     from ml.predict import get_predictor
                     predictor = get_predictor()
@@ -873,6 +928,8 @@ class PhysicsMLEvaluator:
                     pass
             except Exception as e:
                 cand.score = 0.0
+                cand.score_source = "physics_error"
+                cand.physics_evaluated = True
                 cand.physics_result = {"error": str(e)}
         return candidates
 
@@ -1090,6 +1147,10 @@ def _ml_prefilter(candidates: list, intent: dict, use_ml: bool = True, limit: in
                 cand.ml_predictions = preds or {}
             except Exception:
                 cand.ml_predictions = {}
+                cand.screening_score = max(float(cand.screening_score or 0.0), 50.0)
+                if not cand.physics_evaluated:
+                    cand.score = round(cand.screening_score, 2)
+                    cand.score_source = "screen"
                 scored.append((cand, 50.0))
                 continue
 
@@ -1101,6 +1162,11 @@ def _ml_prefilter(candidates: list, intent: dict, use_ml: bool = True, limit: in
                     continue
 
             ml_conf = _compute_ml_confidence(cand.ml_predictions)
+             # Keep a provisional rank for candidates that never reach full physics.
+            cand.screening_score = max(float(cand.screening_score or 0.0), ml_conf)
+            if not cand.physics_evaluated:
+                cand.score = round(cand.screening_score, 2)
+                cand.score_source = "ml_prefilter"
             scored.append((cand, ml_conf))
 
         if not scored:
@@ -1116,13 +1182,25 @@ def _ml_prefilter(candidates: list, intent: dict, use_ml: bool = True, limit: in
 
 
 class Pipeline:
-    def __init__(self, max_iterations=4, convergence_threshold=2.0, on_step=None,
-                 constraints=None, use_ml=False):
+    def __init__(
+        self,
+        max_iterations=4,
+        convergence_threshold=2.0,
+        on_step=None,
+        constraints=None,
+        use_ml=False,
+        target_score=85.0,
+        feedback_limit=3,
+        min_iterations=2,
+    ):
         self.max_iterations = max_iterations
         self.convergence_threshold = convergence_threshold
         self.on_step = on_step or (lambda s: None)
         self.constraints = constraints or {}
         self.use_ml = use_ml
+        self.target_score = float(target_score)
+        self.feedback_limit = max(1, int(feedback_limit))
+        self.min_iterations = max(1, int(min_iterations))
         self.steps = []
         self.all_candidates = []
         self.best_score_history = []
@@ -1131,7 +1209,15 @@ class Pipeline:
             "post_dedupe": 0,
             "downselected_for_physics": 0,
             "physics_evaluated": 0,
+            "returned_candidates": 0,
             "iterations": [],
+            "config": {
+                "max_iterations": self.max_iterations,
+                "target_score": self.target_score,
+                "feedback_limit": self.feedback_limit,
+                "min_iterations": self.min_iterations,
+                "use_ml": self.use_ml,
+            },
         }
 
     def _log(self, step_num, stage, thought, observation, agent=""):
@@ -1213,6 +1299,8 @@ class Pipeline:
         best_score = 0.0
         improvement = 0
         iteration = 0
+        converged = False
+        stop_reason = "max_iterations"
         target_top_n = max(1, int(intent.get("n_results") or 10))
         generation_budget_total = max(int(intent.get("generation_budget") or 0), max(500, target_top_n * 50))
         physics_budget_total = max(int(intent.get("physics_budget") or 0), max(80, target_top_n * 8))
@@ -1229,11 +1317,16 @@ class Pipeline:
         for iteration in range(self.max_iterations):
             feedback = None
             if iteration > 0:
-                prev = [c for c in self.all_candidates if c.iteration == iteration - 1]
-                feedback = _build_feedback(prev)
+                previous_pool = [c for c in self.all_candidates if c.physics_evaluated or c.weak_domains]
+                if previous_pool:
+                    feedback = _build_feedback(
+                        previous_pool,
+                        target_score=self.target_score,
+                        limit=self.feedback_limit,
+                    )
             self._log(step_counter, "generate",
                       f"Iteration {iteration + 1}: Generating compositions",
-                      "Refining" if feedback else "Initial exploration",
+                      "Refining from compact cross-iteration feedback" if feedback else "Initial exploration",
                       agent="MultiCompGenerator")
             step_counter += 1
             candidates = MultiCompositionGenerator.generate(
@@ -1247,6 +1340,13 @@ class Pipeline:
             candidates = _dedupe_candidates(candidates, similarity_threshold=0.04)
             iter_stats["post_dedupe"] = len(candidates)
             self.generation_stats["post_dedupe"] += len(candidates)
+            for cand in candidates:
+                cand.iteration = iteration
+                cand.screening_score = round(_cheap_candidate_score(cand, intent, query), 2)
+                if not cand.physics_evaluated:
+                    cand.score = cand.screening_score
+                    cand.score_source = "screen"
+            self.all_candidates.extend(candidates)
             if len(candidates) != pre_dedupe:
                 self._log(step_counter, "dedupe",
                           f"Removed repeats: {pre_dedupe} -> {len(candidates)}",
@@ -1263,40 +1363,39 @@ class Pipeline:
                 step_counter += 1
 
             pre_screen = len(candidates)
-            candidates = _downselect_candidates(candidates, physics_budget_iter, query, intent)
-            iter_stats["downselected_for_physics"] = len(candidates)
-            self.generation_stats["downselected_for_physics"] += len(candidates)
-            if len(candidates) != pre_screen:
+            shortlisted = _downselect_candidates(candidates, physics_budget_iter, query, intent)
+            iter_stats["downselected_for_physics"] = len(shortlisted)
+            iter_stats["screened_out_before_physics"] = max(0, len(candidates) - len(shortlisted))
+            self.generation_stats["downselected_for_physics"] += len(shortlisted)
+            if len(shortlisted) != pre_screen:
                 self._log(step_counter, "screen",
-                          f"Physics shortlist: {pre_screen} -> {len(candidates)}",
+                          f"Physics shortlist: {pre_screen} -> {len(shortlisted)}",
                           "Cheap intent-alignment ranking + diversity round-robin before full physics",
                           agent="Pipeline")
                 step_counter += 1
 
             self._log(step_counter, "evaluate",
-                      f"Evaluating {len(candidates)} candidates",
+                      f"Evaluating {len(shortlisted)} candidates",
                       "Running physics + ML...", agent="PhysicsMLEvaluator")
             step_counter += 1
-            self.generation_stats["physics_evaluated"] += len(candidates)
-            iter_stats["physics_evaluated"] = len(candidates)
-            candidates = PhysicsMLEvaluator.evaluate(
-                candidates, query=query, T_K=T_K, weather=weather, domains_focus=domains_focus,
+            self.generation_stats["physics_evaluated"] += len(shortlisted)
+            iter_stats["physics_evaluated"] = len(shortlisted)
+            shortlisted = PhysicsMLEvaluator.evaluate(
+                shortlisted, query=query, T_K=T_K, weather=weather, domains_focus=domains_focus,
                 constraints=self.constraints, dpa_rate=dpa_rate, pressure_MPa=pressure_MPa,
                 research_data=research_data)
 
             if self.use_ml:
                 n_combined = 0
-                for cand in candidates:
+                for cand in shortlisted:
                     if cand.ml_predictions:
                         ml_conf = _compute_ml_confidence(cand.ml_predictions)
                         cand.score = round(0.6 * cand.score + 0.4 * ml_conf, 2)
+                        cand.score_source = "physics_ml"
                         n_combined += 1
                 if n_combined:
                     logger.debug(f"[Pipeline] Combined score applied to {n_combined} candidates")
-            for cand in candidates:
-                cand.iteration = iteration
-            self.all_candidates.extend(candidates)
-            iter_best = max(c.score for c in candidates) if candidates else 0
+            iter_best = max((c.score for c in shortlisted), default=0)
             improvement = iter_best - best_score
             best_score = max(best_score, iter_best)
             self.best_score_history.append(best_score)
@@ -1304,9 +1403,24 @@ class Pipeline:
                       f"Best: {iter_best:.1f}/100 (delta {improvement:+.1f})",
                       f"Overall best: {best_score:.1f}/100", agent="PhysicsMLEvaluator")
             step_counter += 1
+            iter_stats["master_pool_after_iteration"] = len(self.all_candidates)
             self.generation_stats["iterations"].append(iter_stats)
-            if iteration > 0 and improvement < self.convergence_threshold:
-                self._log(step_counter, "converge", "Converged", "Stopping", agent="Pipeline")
+            if best_score >= self.target_score:
+                converged = True
+                stop_reason = "target_score_reached"
+                self._log(
+                    step_counter,
+                    "converge",
+                    f"Target reached ({best_score:.1f}/{self.target_score:.1f})",
+                    "Stopping early to save time and tokens",
+                    agent="Pipeline",
+                )
+                step_counter += 1
+                break
+            if iteration + 1 >= self.min_iterations and improvement < self.convergence_threshold and best_score >= max(70.0, self.target_score - 15.0):
+                converged = True
+                stop_reason = "converged"
+                self._log(step_counter, "converge", "Converged", "Further improvement looks marginal", agent="Pipeline")
                 step_counter += 1
                 break
         pre_final_dedupe = len(self.all_candidates)
@@ -1317,7 +1431,9 @@ class Pipeline:
                       "Keeping only unique candidate compositions",
                       agent="Pipeline")
             step_counter += 1
-        self.all_candidates.sort(key=lambda c: -c.score)
+        self.all_candidates.sort(key=_candidate_sort_key, reverse=True)
+        self.generation_stats["returned_candidates"] = len(self.all_candidates)
+        self.generation_stats["stop_reason"] = stop_reason
         self._log(step_counter, "correlate", "Analyzing cross-domain correlations",
                   "Finding synergies...", agent="DomainCorrelator")
         step_counter += 1
@@ -1333,7 +1449,7 @@ class Pipeline:
         return PipelineResult(
             candidates=self.all_candidates, steps=self.steps, baseline=baseline,
             iterations_run=iteration + 1,
-            converged=(improvement < self.convergence_threshold if iteration > 0 else False),
+            converged=converged,
             best_score=best_score, total_time=time.time() - t0,
             explanation=explanation, correlation_insights=correlation_insights,
             generation_stats=self.generation_stats,
@@ -1356,7 +1472,7 @@ def _composition_signature(comp, top_n=4, min_frac=0.03):
 
 def _dedupe_candidates(candidates, similarity_threshold=0.02):
     # Keep highest scoring instances first where possible.
-    ranked = sorted(candidates, key=lambda c: getattr(c, "score", 0.0), reverse=True)
+    ranked = sorted(candidates, key=_candidate_sort_key, reverse=True)
     unique = []
     for cand in ranked:
         comp = cand.composition_wt or cand.composition or {}
@@ -1377,30 +1493,68 @@ def _dedupe_candidates(candidates, similarity_threshold=0.02):
     return unique
 
 
-def _build_feedback(candidates):
+def _candidate_sort_key(candidate):
+    return (
+        float(getattr(candidate, "score", 0.0) or 0.0),
+        float(getattr(candidate, "screening_score", 0.0) or 0.0),
+        1 if getattr(candidate, "physics_evaluated", False) else 0,
+    )
+
+
+def _build_feedback(candidates, target_score=85.0, limit=3):
     if not candidates:
-        return {"best_score": 0, "weak_summary": "no data", "weak_details": []}
-    best = max(candidates, key=lambda c: c.score)
+        return {"best_score": 0, "weak_summary": "no data", "weak_details": [], "failure_examples": []}
+    ranked = sorted(candidates, key=_candidate_sort_key, reverse=True)
+    best = ranked[0]
     all_weak = {}
-    for c in candidates:
+    for c in ranked:
         for w in c.weak_domains:
             name = w["name"]
             if name not in all_weak or w["score"] < all_weak[name]["score"]:
                 all_weak[name] = w
     weak_sorted = sorted(all_weak.values(), key=lambda w: w["score"])[:5]
-    return {"best_score": best.score, "top_candidate": best.composition_wt,
-            "weak_summary": ", ".join(w["name"] for w in weak_sorted) if weak_sorted else "none",
-            "weak_details": weak_sorted}
+    failures = []
+    seen_signatures = set()
+    for cand in ranked:
+        comp = cand.composition_wt or cand.composition or {}
+        if not comp:
+            continue
+        signature = _composition_signature(comp, top_n=4, min_frac=0.02)
+        if signature in seen_signatures:
+            continue
+        seen_signatures.add(signature)
+        weak = sorted(cand.weak_domains, key=lambda item: item.get("score", 100))
+        main_issue = weak[0]["name"] if weak else ("missed target score" if cand.score < target_score else "improve margins")
+        failures.append(
+            {
+                "score": round(float(cand.score or 0.0), 2),
+                "composition": comp,
+                "composition_summary": _compact_comp(comp, top=5, digits=2),
+                "main_issue": main_issue,
+                "physics_evaluated": bool(cand.physics_evaluated),
+            }
+        )
+        if len(failures) >= max(1, int(limit)):
+            break
+    return {
+        "best_score": best.score,
+        "top_candidate": best.composition_wt,
+        "weak_summary": ", ".join(w["name"] for w in weak_sorted) if weak_sorted else "none",
+        "weak_details": weak_sorted,
+        "failure_examples": failures,
+    }
 
 
 def run_pipeline(query, intent, on_step=None, max_iterations=4, T_K=298.0,
                  weather=None, constraints=None, dpa_rate=1e-7, pressure_MPa=0.0,
-                 use_ml=False):
+                 use_ml=False, target_score=85.0, feedback_limit=3, min_iterations=2):
     merged = dict(intent.get("constraints", {}))
     if constraints:
         merged.update(constraints)
     pipeline = Pipeline(max_iterations=max_iterations, on_step=on_step,
-                        constraints=merged, use_ml=use_ml)
+                        constraints=merged, use_ml=use_ml,
+                        target_score=target_score, feedback_limit=feedback_limit,
+                        min_iterations=min_iterations)
     return pipeline.run(query=query, intent=intent, T_K=T_K, weather=weather,
                         domains_focus=intent.get("domains_focus"), dpa_rate=dpa_rate,
                         pressure_MPa=pressure_MPa)

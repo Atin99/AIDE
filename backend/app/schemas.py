@@ -12,6 +12,10 @@ class RunOverrides(BaseModel):
     temperature_K: Optional[float] = None
     environment: Optional[str] = None
     n_results: Optional[int] = None
+    max_iterations: Optional[int] = None
+    min_iterations: Optional[int] = None
+    target_score: Optional[float] = None
+    feedback_limit: Optional[int] = None
     dpa_rate: Optional[float] = None
     pressure_MPa: Optional[float] = None
     use_ml: Optional[bool] = None

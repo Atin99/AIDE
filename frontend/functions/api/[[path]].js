@@ -1,5 +1,6 @@
 export async function onRequest(context) {
   const origin = new URL(context.request.url).origin;
+  const timeoutMs = Math.max(1000, Number(context.env.AIDE_PROXY_TIMEOUT_MS || 300000));
 
   if (context.request.method === "OPTIONS") {
     return new Response(null, {
@@ -40,12 +41,31 @@ export async function onRequest(context) {
     init.body = await context.request.arrayBuffer();
   }
 
-  const upstream = await fetch(target, init);
-  const outHeaders = new Headers(upstream.headers);
-  outHeaders.set("Access-Control-Allow-Origin", origin);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  init.signal = controller.signal;
 
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: outHeaders,
-  });
+  try {
+    const upstream = await fetch(target, init);
+    const outHeaders = new Headers(upstream.headers);
+    outHeaders.set("Access-Control-Allow-Origin", origin);
+
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: outHeaders,
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      return new Response(JSON.stringify({ error: `Upstream request timed out after ${Math.round(timeoutMs / 1000)} seconds` }), {
+        status: 504,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": origin,
+        },
+      });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }

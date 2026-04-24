@@ -111,6 +111,14 @@ def run_engine(query: Optional[str], intent: Optional[Dict[str, Any]], overrides
     payload.setdefault("temperature_K", 298.0)
     if payload.get("n_results") is None:
         payload["n_results"] = 10
+    if payload.get("max_iterations") is None:
+        payload["max_iterations"] = 4
+    if payload.get("min_iterations") is None:
+        payload["min_iterations"] = 2
+    if payload.get("target_score") is None:
+        payload["target_score"] = 85.0
+    if payload.get("feedback_limit") is None:
+        payload["feedback_limit"] = 3
     if payload.get("dpa_rate") is None:
         payload["dpa_rate"] = 1e-7
     if payload.get("pressure_MPa") is None:

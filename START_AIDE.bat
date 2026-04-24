@@ -66,6 +66,6 @@ echo   Press Ctrl+C to stop the server.
 echo ============================================
 echo.
 
-%PYTHON_EXE% -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000
+%PYTHON_EXE% -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000 --timeout-keep-alive 300
 
 pause

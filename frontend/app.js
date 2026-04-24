@@ -14,6 +14,8 @@ var radarChartInstance = null;
 var barChartInstance = null;
 var compareRadarInstance = null;
 var lastPayload = null;
+var API_TIMEOUT_MS = 300000;
+var HEALTH_TIMEOUT_MS = 10000;
 
 var DOMAIN_HINTS = {
   "Thermodynamics": "High = stable phase formation",
@@ -98,11 +100,28 @@ function setStatus(state, label) {
   $("statusText").textContent = label;
 }
 
+async function fetchWithTimeout(url, options, timeoutMs) {
+  var controller = new AbortController();
+  var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+  try {
+    var requestOptions = Object.assign({}, options || {});
+    requestOptions.signal = controller.signal;
+    return await fetch(url, requestOptions);
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error("Request timed out after " + Math.round(timeoutMs / 1000) + " seconds.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function checkHealth() {
   var base = apiBase();
   if (!base) { setStatus("disconnected", "No URL"); return; }
   setStatus("", "Checking");
-  fetch(base + "/health", { method: "GET" })
+  fetchWithTimeout(base + "/health", { method: "GET" }, HEALTH_TIMEOUT_MS)
     .then(function(r) { return r.json(); })
     .then(function(b) {
       if (b && b.ok) setStatus("connected", "Connected");
@@ -114,13 +133,19 @@ function checkHealth() {
 async function callApi(path, method, body) {
   var base = apiBase();
   if (!base) throw new Error("API base URL is required");
-  var response = await fetch(base + path, {
+  var response = await fetchWithTimeout(base + path, {
     method: method,
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  });
-  var payload = await response.json();
-  if (!response.ok) throw new Error((payload && payload.detail) || "Request failed (" + response.status + ")");
+  }, API_TIMEOUT_MS);
+  var rawText = await response.text();
+  var payload = null;
+  try {
+    payload = rawText ? JSON.parse(rawText) : null;
+  } catch (error) {
+    payload = { detail: rawText || null };
+  }
+  if (!response.ok) throw new Error((payload && (payload.detail || payload.error)) || "Request failed (" + response.status + ")");
   return payload;
 }
 
@@ -253,9 +278,12 @@ async function runEngine() {
     return;
   }
   setLoading("engineBtn", "engineSpinner", true);
-  $("engineSummary").innerHTML = '<div>[RUN] Running full pipeline... this may take 45-90 seconds</div>';
+  $("engineSummary").innerHTML = '<div>[RUN] Running full pipeline and multi-iteration optimization... this may take 3 to 5 minutes.</div>';
   try {
-    var payload = await callApi("/api/v1/run", "POST", { query: query, overrides: { use_ml: true, n_results: 12 } });
+    var payload = await callApi("/api/v1/run", "POST", {
+      query: query,
+      overrides: { use_ml: true, n_results: 12, max_iterations: 4, min_iterations: 2, target_score: 85, feedback_limit: 3 },
+    });
     lastPayload = payload;
     var type = (payload.data || {}).request_type || "";
     var matched = (payload.data || {}).matched_alloy || "";
@@ -501,6 +529,8 @@ function showMetrics(data, result) {
   if (result.n_fail != null) cards.push({ label: "Fail", value: result.n_fail });
   if (result.best_score != null) cards.push({ label: "Best Score", value: Number(result.best_score).toFixed(1) });
   if (result.n_candidates != null) cards.push({ label: "Candidates", value: result.n_candidates });
+  if (result.n_physics_evaluated != null) cards.push({ label: "Physics Eval", value: result.n_physics_evaluated });
+  if (result.iterations != null) cards.push({ label: "Iterations", value: result.iterations });
   metrics.innerHTML = cards.map(function(c) {
     return '<div class="metric-card"><div class="metric-label">' + c.label + '</div><div class="metric-value">' + c.value + '</div></div>';
   }).join("");
@@ -629,17 +659,20 @@ function renderCandidatesTable(data) {
   var detail = result.candidates_detail || [];
   if ((!top || !Array.isArray(top) || !top.length) && !detail.length) { container.classList.add("hidden"); return; }
   container.classList.remove("hidden");
-  var html = '<h3 style="margin: 16px 0 8px; font-size: 1rem;">Top Candidates</h3>';
-  html += '<table><thead><tr><th>#</th><th>Type</th><th>Score</th><th>P</th><th>W</th><th>F</th><th>Composition</th></tr></thead><tbody>';
+  var title = detail.length ? "Candidate Pool (" + detail.length + " returned)" : "Top Candidates";
+  var html = '<h3 style="margin: 16px 0 8px; font-size: 1rem;">' + escapeHtml(title) + '</h3>';
+  html += '<table><thead><tr><th>#</th><th>Type</th><th>Iter</th><th>Score</th><th>Source</th><th>Composition</th></tr></thead><tbody>';
 
   if (detail.length) {
     detail.forEach(function(cd, i) {
       var badgeCls = cd.result_type === "catalog" ? "badge-catalog" : "badge-generated";
       var badgeText = cd.result_type === "catalog" ? "CATALOG" : "GENERATED";
+      var source = cd.physics_evaluated ? "PHYSICS" : String(cd.score_source || "SCREEN").toUpperCase();
       html += '<tr><td>' + (i + 1) + '</td>';
       html += '<td><span class="badge ' + badgeCls + '">' + badgeText + '</span></td>';
+      html += '<td>' + ((cd.iteration != null ? Number(cd.iteration) + 1 : "-")) + '</td>';
       html += '<td>' + (cd.score != null ? Number(cd.score).toFixed(1) : "?") + '</td>';
-      html += '<td>-</td><td>-</td><td>-</td>';
+      html += '<td>' + escapeHtml(source) + '</td>';
       html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(cd.composition_wt || cd.composition || {}, 5)) + '</td></tr>';
     });
   } else if (top) {
@@ -648,8 +681,9 @@ function renderCandidatesTable(data) {
       var r = entry[1] || entry.result || {};
       html += '<tr><td>' + (i + 1) + '</td>';
       html += '<td><span class="badge badge-generated">GENERATED</span></td>';
+      html += '<td>-</td>';
       html += '<td>' + (r.composite_score != null ? Number(r.composite_score).toFixed(1) : "?") + '</td>';
-      html += '<td>' + (r.n_pass || 0) + '</td><td>' + (r.n_warn || 0) + '</td><td>' + (r.n_fail || 0) + '</td>';
+      html += '<td>PHYSICS</td>';
       html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(comp, 5)) + '</td></tr>';
     });
   }

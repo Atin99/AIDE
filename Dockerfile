@@ -21,4 +21,4 @@ ENV AIDE_USE_LOCAL_INTENT=0
 EXPOSE 7860
 
 # Run the FastAPI application on port 7860
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "7860", "--timeout-keep-alive", "300"]

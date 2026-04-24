@@ -89,4 +89,4 @@ Write-Host "  Press Ctrl+C to stop." -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-& $python.Path -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000
+& $python.Path -m uvicorn backend.app.main:app --host 0.0.0.0 --port 9000 --timeout-keep-alive 300

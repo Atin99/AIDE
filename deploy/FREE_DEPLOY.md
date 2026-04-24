@@ -57,6 +57,7 @@ This creates `deploy/hf_space_bundle/` with everything needed for the Docker Spa
 
 Option A - Proxy mode (recommended):
 - Set Pages environment variable `AIDE_BACKEND_URL` to your Space URL.
+- Set Pages environment variable `AIDE_PROXY_TIMEOUT_MS=300000`.
 - The `functions/api/[[path]].js` proxy will forward API calls.
 
 Option B - Direct mode:
@@ -83,5 +84,6 @@ Option B - Direct mode:
 | Space build fails | Check that `requirements.txt` has all dependencies. Run `pip install -r requirements.txt` locally first. |
 | CORS errors in browser | Set `AIDE_API_CORS_ORIGINS` to your exact frontend URL (no trailing slash). |
 | API returns 500 | Check Space logs. Most likely a missing Python package. |
+| Long design runs stop early | Keep Uvicorn at `--timeout-keep-alive 300`, set `AIDE_PROXY_TIMEOUT_MS=300000`, and note that some edge platforms still enforce their own hard request caps. |
 | Health check returns unhealthy | Restart the Space. |
 | Frontend shows disconnected | Verify API base URL is correct. Try `?api=https://your-space-url` in the URL bar. |

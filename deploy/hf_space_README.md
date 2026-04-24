@@ -18,3 +18,4 @@ Containerized FastAPI backend for alloy analysis.
 
 - Keep `AIDE_ENABLE_REMOTE_LLM=0` for local-only LLM behavior.
 - Set `AIDE_API_CORS_ORIGINS` to your frontend URL for production.
+- Start Uvicorn with `--timeout-keep-alive 300` for long multi-iteration runs.
