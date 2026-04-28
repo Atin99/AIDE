@@ -853,6 +853,89 @@ Rules:
         return None
 
 
+_EMERGENCY_SEEDS = {
+    "stainless": [
+        {"Fe": 0.66, "Cr": 0.18, "Ni": 0.10, "Mo": 0.03, "Mn": 0.02, "Si": 0.01},
+        {"Fe": 0.62, "Cr": 0.22, "Ni": 0.06, "Mo": 0.03, "N": 0.02, "Mn": 0.05},
+        {"Fe": 0.58, "Cr": 0.25, "Ni": 0.08, "Mo": 0.04, "Cu": 0.02, "Mn": 0.03},
+    ],
+    "superalloy": [
+        {"Ni": 0.60, "Cr": 0.15, "Co": 0.08, "Mo": 0.05, "Al": 0.05, "Ti": 0.04, "W": 0.03},
+        {"Ni": 0.55, "Cr": 0.20, "Co": 0.10, "Mo": 0.04, "W": 0.06, "Al": 0.03, "Ti": 0.02},
+        {"Ni": 0.52, "Cr": 0.19, "Fe": 0.18, "Nb": 0.05, "Mo": 0.03, "Ti": 0.01, "Al": 0.02},
+    ],
+    "ti_alloy": [
+        {"Ti": 0.90, "Al": 0.06, "V": 0.04},
+        {"Ti": 0.85, "Al": 0.06, "Mo": 0.04, "V": 0.03, "Cr": 0.02},
+    ],
+    "al_alloy": [
+        {"Al": 0.90, "Cu": 0.04, "Mg": 0.03, "Mn": 0.02, "Si": 0.01},
+        {"Al": 0.87, "Zn": 0.06, "Mg": 0.03, "Cu": 0.02, "Cr": 0.01, "Ti": 0.01},
+    ],
+    "cu_alloy": [
+        {"Cu": 0.70, "Zn": 0.25, "Al": 0.03, "Ni": 0.02},
+        {"Cu": 0.88, "Sn": 0.08, "P": 0.01, "Ni": 0.03},
+    ],
+    "structural": [
+        {"Fe": 0.97, "C": 0.004, "Mn": 0.015, "Si": 0.005, "Cr": 0.003, "Mo": 0.003},
+        {"Fe": 0.70, "Cr": 0.12, "Ni": 0.08, "Mo": 0.04, "Mn": 0.03, "V": 0.02, "C": 0.005},
+    ],
+}
+_EMERGENCY_SEEDS["general_structural"] = _EMERGENCY_SEEDS["structural"]
+_EMERGENCY_SEEDS["nuclear"] = [{"Zr": 0.98, "Nb": 0.01, "Fe": 0.005, "Cr": 0.005}]
+_EMERGENCY_SEEDS["biomedical"] = [{"Ti": 0.64, "Nb": 0.24, "Zr": 0.08, "Ta": 0.04}]
+_EMERGENCY_SEEDS["refractory"] = [{"Nb": 0.40, "Mo": 0.25, "Ta": 0.20, "W": 0.10, "V": 0.05}]
+
+
+def _emergency_seed_candidates(intent, query, target=50):
+    """Generate candidates from hardcoded seeds when core.generator fails.
+    Pure Python, no external dependencies beyond core.elements."""
+    import random as _rng
+    rng = _rng.Random(42)
+
+    app = intent.get("application", "structural")
+    seeds = _EMERGENCY_SEEDS.get(app, _EMERGENCY_SEEDS["structural"])
+
+    candidates = []
+    for seed in seeds:
+        # Add the seed itself
+        try:
+            wt = _apply_intent_to_wt(dict(seed), intent, query)
+            mol = validate_composition(wt_to_mol(wt))
+            candidates.append(Candidate(
+                composition=mol, composition_wt=wt,
+                rationale="Emergency seed", score_source="seed",
+            ))
+        except Exception:
+            continue
+
+        # Perturb each seed
+        for _ in range(target // max(1, len(seeds))):
+            perturbed = {}
+            for el, frac in seed.items():
+                noise = rng.gauss(0, 0.15)
+                perturbed[el] = max(0.001, frac * (1 + noise))
+            # Occasionally add a random minor element
+            if rng.random() < 0.3:
+                minors = ["Cu", "Mn", "Si", "V", "Nb", "N", "Ti", "Al", "W", "Co"]
+                el = rng.choice(minors)
+                if el not in perturbed:
+                    perturbed[el] = rng.uniform(0.005, 0.04)
+            total = sum(perturbed.values())
+            perturbed = {k: v / total for k, v in perturbed.items()}
+            try:
+                wt = _apply_intent_to_wt(perturbed, intent, query)
+                mol = validate_composition(wt_to_mol(wt))
+                candidates.append(Candidate(
+                    composition=mol, composition_wt=wt,
+                    rationale="Emergency perturbation", score_source="seed",
+                ))
+            except Exception:
+                continue
+
+    return candidates
+
+
 class MultiCompositionGenerator:
     @staticmethod
     def generate(query, intent, baseline, n=8, iteration=0, feedback=None):
@@ -929,8 +1012,8 @@ class MultiCompositionGenerator:
                     )
                 except Exception:
                     continue
-        except Exception:
-            pass
+        except Exception as gen_err:
+            logger.warning("[GENERATE] Template generation failed: %s", gen_err)
 
         target_floor = max(10, n + 2)
         if len(candidates) < target_floor:
@@ -990,8 +1073,15 @@ class MultiCompositionGenerator:
                             continue
                     if len(candidates) >= target_floor * 2:
                         break
-            except Exception:
-                pass
+            except Exception as fallback_err:
+                logger.warning("[GENERATE] Relaxed fallback generation also failed: %s", fallback_err)
+
+        # Emergency inline generation if template+relaxed both failed
+        if len(candidates) < max(10, n):
+            logger.warning("[GENERATE] Only %d candidates generated, running emergency seed perturbation", len(candidates))
+            emergency_seeds = _emergency_seed_candidates(intent, query, target=max(50, n * 3))
+            candidates.extend(emergency_seeds)
+            logger.info("[GENERATE] Emergency generator added %d candidates", len(emergency_seeds))
 
         if len(candidates) == initial_len:
             seed_wt = _apply_intent_to_wt(
