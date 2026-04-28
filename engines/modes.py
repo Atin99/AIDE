@@ -93,7 +93,8 @@ class DesignEngine:
                 if len(top) >= top_n:
                     break
         return {
-            "mode": "design", "top": top, "n_candidates": len(result.candidates),
+            "mode": "design", "top": top,
+            "n_candidates": len(result.candidates),
             "n_generated_raw": result.generation_stats.get("raw_generated", 0),
             "n_physics_evaluated": result.generation_stats.get("physics_evaluated", len(result.candidates)),
             "n_domains": top[0][1].get("n_domains", 0) if top else 0,
@@ -123,7 +124,7 @@ class DesignEngine:
                                    "weak_domains": c.weak_domains,
                                    "result_type": c.result_type,
                                    "provenance": c.provenance}
-                                  for c in result.candidates]}
+                                  for c in result.candidates if c.physics_evaluated]}
 
 
 class ModifyEngine:

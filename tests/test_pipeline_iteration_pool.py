@@ -140,12 +140,13 @@ class PipelineIterationPoolTests(unittest.TestCase):
             )
 
         self.assertEqual(len(result["top"]), 2)
-        self.assertEqual(len(result["candidates_detail"]), 4)
+        # candidates_detail now only includes physics-evaluated candidates
+        self.assertEqual(len(result["candidates_detail"]), 2)
         self.assertEqual(result["pipeline_config"]["max_iterations"], 4)
         self.assertEqual(result["best_physics_score"], 81.0)
         self.assertEqual(result["best_rank_score"], 81.0)
         self.assertEqual(result["candidates_detail"][0]["physics_score"], 81.0)
-        self.assertIsNone(result["candidates_detail"][2]["physics_score"])
+        self.assertTrue(all(c["physics_evaluated"] for c in result["candidates_detail"]))
 
 
 if __name__ == "__main__":
