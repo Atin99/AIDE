@@ -87,17 +87,40 @@ class ResearchResult:
         return self
 
     def composition_violates_base(self, composition: dict[str, float]) -> tuple[bool, str]:
+        """Check if composition violates base element constraints.
+        
+        Returns (violated, reason). A composition is only hard-rejected if
+        the base element is completely absent or below 20% of the requirement.
+        Moderate shortfalls are handled by the scoring penalty system instead.
+        """
         base = self.base_elements[0]
         frac = composition.get(base, 0.0)
-        if frac < self.base_min_fraction * 0.95:
+        # Only hard-reject if base element is drastically wrong
+        # (below 20% of requirement — e.g. Cu alloy with <12% Cu)
+        hard_floor = self.base_min_fraction * 0.20
+        if frac < hard_floor:
             return (
                 True,
-                f"Base element {base} present at {frac:.3f}, requires >= {self.base_min_fraction:.2f}.",
+                f"Base element {base} at {frac:.3f}, needs >= {self.base_min_fraction:.2f}.",
             )
         for el in self.forbidden_elements:
             if composition.get(el, 0.0) > 0.005:
                 return True, f"Forbidden element {el} is present."
         return False, ""
+
+    def base_element_penalty(self, composition: dict[str, float]) -> float:
+        """Return a penalty factor (0.0-1.0) for base element shortfall.
+        1.0 = fully meets requirement, <1.0 = proportional penalty.
+        """
+        base = self.base_elements[0]
+        frac = composition.get(base, 0.0)
+        if frac >= self.base_min_fraction:
+            return 1.0
+        if self.base_min_fraction <= 0:
+            return 1.0
+        ratio = frac / self.base_min_fraction
+        # Smooth penalty: 50% of requirement → 0.5x score
+        return max(0.1, min(1.0, ratio))
 
 
 class ApplicationResearcher:

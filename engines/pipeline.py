@@ -1313,6 +1313,13 @@ class PhysicsMLEvaluator:
                     if violated:
                         cand.score = 0
                         cand.weak_domains.append({"name": "Base Material Rejection", "score": 0, "fails": [reason]})
+                    else:
+                        # Apply proportional penalty for base element shortfall
+                        base_penalty = research_data.base_element_penalty(weight_comp)
+                        if base_penalty < 1.0:
+                            cand.score = round(cand.score * base_penalty, 2)
+                            cand.weak_domains.append({"name": "Base Element Shortfall", "score": int(base_penalty * 100),
+                                                      "fails": [f"{research_data.base_elements[0]} below target ({base_penalty:.0%} of requirement)"]})
                     
                     if cand.score > 0:
                         mech_reason = PhysicsMLEvaluator._check_mechanisms(cand.composition, research_data.mandatory_mechanisms)
