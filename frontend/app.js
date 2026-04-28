@@ -282,7 +282,7 @@ async function runEngine() {
   try {
     var payload = await callApi("/api/v1/run", "POST", {
       query: query,
-      overrides: { use_ml: true, n_results: 12, max_iterations: 4, min_iterations: 2, target_score: 85, feedback_limit: 3 },
+      overrides: { use_ml: false, n_results: 10, max_iterations: 1, min_iterations: 1, target_score: 85, feedback_limit: 3 },
     });
     lastPayload = payload;
     var type = (payload.data || {}).request_type || "";
