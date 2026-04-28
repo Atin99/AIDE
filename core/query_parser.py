@@ -3,6 +3,16 @@ from core.elements import available as available_elements
 
 ALL_SYMS = set(available_elements())
 
+HOT_SECTION_MARKERS = [
+    "superalloy", "inconel", "turbine", "gas turbine", "jet engine",
+    "hot section", "blade", "combustor", "exhaust nozzle",
+]
+
+AEROSPACE_STRUCTURE_MARKERS = [
+    "airframe", "fuselage", "wing", "wing spar", "skin", "panel", "bulkhead",
+    "frame", "aircraft body", "jet body", "aerospace structural", "aircraft frame",
+]
+
 ELEMENT_NAMES = {
     "hydrogen":"H","helium":"He","lithium":"Li","beryllium":"Be","boron":"B",
     "carbon":"C","nitrogen":"N","oxygen":"O","fluorine":"F","neon":"Ne",
@@ -34,6 +44,10 @@ def _find_elements(text: str) -> list:
             if re.search(pat, text):
                 found.append(sym)
     return found
+
+
+def _contains_any(text: str, markers: list[str]) -> bool:
+    return any(marker in text for marker in markers)
 
 
 def parse_query(query: str) -> dict:
@@ -122,8 +136,8 @@ def parse_query(query: str) -> dict:
         ("fusible_alloy",   ["fuse alloy","fuse wire","fusible","fusible wire","low melting","low-melting","solder","solder alloy","thermal fuse","fusible link","braze filler"]),
         ("electronic_alloy",["chip alloy","chip package","semiconductor","interconnect","bond wire","wire bond","solder bump","microelectronics","electronic packaging","leadframe"]),
         ("stainless",       ["stainless","316","304","duplex","marine","corrosion","bridge","pipeline","coastal"]),
-        ("superalloy",      ["superalloy","turbine","jet","inconel","gas turbine","blade"]),
-        ("ti_alloy",        ["titanium","ti-6","ti64","aerospace lightweight","ti alloy"]),
+        ("superalloy",      HOT_SECTION_MARKERS),
+        ("ti_alloy",        ["titanium","ti-6","ti64","aerospace lightweight","ti alloy"] + AEROSPACE_STRUCTURE_MARKERS),
         ("al_alloy",        ["aluminium","aluminum","al alloy","2024","7075","6061"]),
         ("carbon_steel",    ["carbon steel","plain carbon steel","mild steel"]),
         ("nuclear",         ["nuclear","reactor","cladding","zircaloy","neutron","fission"]),
@@ -136,6 +150,9 @@ def parse_query(query: str) -> dict:
     ]:
         if any(kw in ql for kw in kws):
             result["application"] = app; break
+
+    if not result["application"] and _contains_any(ql, AEROSPACE_STRUCTURE_MARKERS):
+        result["application"] = "ti_alloy"
 
     if any(kw in ql for kw in ["lead-free", "pb-free", "rohs", "cadmium-free", "cd-free"]):
         for symbol in ["Pb", "Cd", "Hg"]:

@@ -13,11 +13,31 @@ logger = logging.getLogger("AIDE.llm")
 
 PROVIDER_SPECS = [
     {
+        "name": "openrouter",
+        "env": "OPENROUTER_API_KEY",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "openai/gpt-oss-20b:free",
+        "json_mode": "response_format",
+        "tier": "free",
+        "label": "OpenRouter Fixed Free",
+    },
+    {
+        "name": "openrouter_router",
+        "env": "OPENROUTER_API_KEY",
+        "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "openrouter/free",
+        "json_mode": "prompt_only",
+        "tier": "free",
+        "label": "OpenRouter Free Router",
+    },
+    {
         "name": "gemini",
         "env": "GEMINI_API_KEY",
         "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
         "model": "gemini-2.5-flash",
         "json_mode": "prompt_only",
+        "tier": "metered",
+        "label": "Gemini",
     },
     {
         "name": "groq",
@@ -25,6 +45,17 @@ PROVIDER_SPECS = [
         "endpoint": "https://api.groq.com/openai/v1/chat/completions",
         "model": "llama-3.1-8b-instant",
         "json_mode": "response_format",
+        "tier": "metered",
+        "label": "Groq",
+    },
+    {
+        "name": "xai",
+        "env": "XAI_API_KEY",
+        "endpoint": "https://api.x.ai/v1/chat/completions",
+        "model": "grok-3-mini",
+        "json_mode": "prompt_only",
+        "tier": "metered",
+        "label": "xAI Grok",
     },
 ]
 EMPTY_KEY_PREFIX = "your_"
@@ -36,11 +67,20 @@ DEFAULT_BROWSER_USER_AGENT = (
     "Chrome/123.0.0.0 Safari/537.36"
 )
 MODEL_ENV_BY_PROVIDER = {
+    "openrouter": "AIDE_OPENROUTER_MODEL",
+    "openrouter_router": "AIDE_OPENROUTER_ROUTER_MODEL",
     "gemini": "AIDE_GEMINI_MODEL",
     "groq": "AIDE_GROQ_MODEL",
+    "xai": "AIDE_XAI_MODEL",
 }
-
-_provider_cursor = 0
+PROVIDER_ORDER_ENV_BY_TASK = {
+    "chat": "AIDE_LLM_PROVIDER_ORDER",
+    "json": "AIDE_LLM_JSON_PROVIDER_ORDER",
+}
+DEFAULT_PROVIDER_ORDER = {
+    "chat": ["openrouter", "openrouter_router", "gemini", "groq", "xai"],
+    "json": ["openrouter", "openrouter_router", "groq", "gemini", "xai"],
+}
 
 
 class ProviderUnavailableError(RuntimeError):
@@ -77,60 +117,80 @@ def _remote_llm_enabled() -> bool:
     return value not in {"0", "false", "no", "off"}
 
 
-def get_available_providers() -> list[dict]:
-    """Return configured remote LLM providers in priority order."""
+def remote_llm_enabled() -> bool:
+    """Return whether remote LLM usage is enabled by configuration."""
+    return _remote_llm_enabled()
+
+
+def _provider_order(task: str = "chat") -> list[str]:
+    env_name = PROVIDER_ORDER_ENV_BY_TASK.get(task, "AIDE_LLM_PROVIDER_ORDER")
+    configured = os.environ.get(env_name, "").strip()
+    if configured:
+        order = [item.strip() for item in configured.split(",") if item.strip()]
+        if order:
+            return order
+    return list(DEFAULT_PROVIDER_ORDER.get(task, DEFAULT_PROVIDER_ORDER["chat"]))
+
+
+def get_available_providers(task: str = "chat") -> list[dict]:
+    """Return configured remote LLM providers in deterministic priority order."""
     if not _remote_llm_enabled():
         return []
     providers = []
-    for spec in PROVIDER_SPECS:
+    order = _provider_order(task)
+    order_index = {name: idx for idx, name in enumerate(order)}
+    for spec_index, spec in enumerate(PROVIDER_SPECS):
         api_key = _configured_api_key(spec["env"])
         if api_key:
-            providers.append({**spec, "api_key": api_key, "model": _configured_model(spec)})
+            providers.append(
+                {
+                    **spec,
+                    "api_key": api_key,
+                    "model": _configured_model(spec),
+                    "_priority": order_index.get(spec["name"], len(order) + spec_index),
+                    "_spec_index": spec_index,
+                }
+            )
+    providers.sort(key=lambda provider: (provider["_priority"], provider["_spec_index"]))
+    for provider in providers:
+        provider.pop("_priority", None)
+        provider.pop("_spec_index", None)
     return providers
 
 
-def get_provider_info() -> tuple[str | None, str | None, str | None]:
+def get_provider_info(task: str = "chat") -> tuple[str | None, str | None, str | None]:
     """Return endpoint, API key, and default model for the first configured provider."""
-    providers = get_available_providers()
+    providers = get_available_providers(task=task)
     if not providers:
         return None, None, None
     provider = providers[0]
     return provider["endpoint"], provider["api_key"], provider["model"]
 
 
-def is_available() -> bool:
-    """Return True when Gemini or Groq credentials are configured."""
-    return bool(get_available_providers())
+def is_available(task: str = "chat") -> bool:
+    """Return True when any configured remote LLM provider is available."""
+    return bool(get_available_providers(task=task))
 
 
-def get_api_key() -> str | None:
+def get_api_key(task: str = "chat") -> str | None:
     """Return the first configured API key, if any."""
-    _, api_key, _ = get_provider_info()
+    _, api_key, _ = get_provider_info(task=task)
     return api_key
 
 
-def _require_provider() -> list[dict]:
+def _require_provider(task: str = "chat") -> list[dict]:
     """Return providers or raise an actionable configuration error."""
-    providers = get_available_providers()
+    providers = get_available_providers(task=task)
     if providers:
         return providers
     raise ProviderUnavailableError(
-        "No remote LLM API key configured. Set GEMINI_API_KEY or GROQ_API_KEY in .env or the environment."
+        "No remote LLM API key configured. Set OPENROUTER_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, or XAI_API_KEY in .env or the environment."
     )
 
 
-def _ordered_providers() -> list[dict]:
-    """Rotate configured providers so fallback attempts are balanced over time."""
-    providers = _require_provider()
-    start = _provider_cursor % len(providers)
-    return providers[start:] + providers[:start]
-
-
-def _advance_cursor(offset: int, provider_count: int) -> None:
-    """Advance the provider cursor after a successful request or full failure cycle."""
-    global _provider_cursor
-    if provider_count > 0:
-        _provider_cursor = (_provider_cursor + offset) % provider_count
+def _ordered_providers(task: str = "chat") -> list[dict]:
+    """Return configured providers in stable fallback order."""
+    return _require_provider(task=task)
 
 
 def _build_payload(
@@ -153,6 +213,8 @@ def _build_payload(
     }
     if force_json and provider.get("json_mode") == "response_format":
         payload["response_format"] = {"type": "json_object"}
+    if force_json and provider["name"].startswith("openrouter"):
+        payload["plugins"] = [{"id": "response-healing"}]
     return payload
 
 
@@ -188,6 +250,13 @@ def _request_headers(provider: dict) -> dict[str, str]:
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+    if provider["name"].startswith("openrouter"):
+        title = os.environ.get("AIDE_OPENROUTER_TITLE", "AIDE v5").strip()
+        referer = os.environ.get("AIDE_OPENROUTER_REFERER", "http://localhost:9000/app/").strip()
+        if title:
+            headers["X-OpenRouter-Title"] = title
+        if referer:
+            headers["HTTP-Referer"] = referer
     if provider["name"] == "groq":
         headers.update(
             {
@@ -206,6 +275,8 @@ def _is_retriable_http(provider: dict, status_code: int, detail: str) -> bool:
     if provider["name"] == "groq":
         if status_code == 403 and "1010" in (detail or ""):
             return False
+        return status_code in {408, 429, 500, 502, 503, 504}
+    if provider["name"] == "xai":
         return status_code in {408, 429, 500, 502, 503, 504}
     return status_code in {408, 429, 500, 502, 503, 504}
 
@@ -255,15 +326,16 @@ def chat(
     force_json: bool = False,
     retries: int = 1,
     timeout: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
+    task: str = "chat",
 ) -> str | None:
-    """Call Gemini first, then Groq, and return the first successful text response."""
-    providers = _ordered_providers()
+    """Call remote providers in stable fallback order and return the first successful text response."""
+    providers = _ordered_providers(task=task)
     last_error = ""
     rounds = max(1, int(retries))
 
     for attempt in range(rounds):
-        ordered = _ordered_providers()
-        for offset, provider in enumerate(ordered):
+        ordered = _ordered_providers(task=task)
+        for provider in ordered:
             try:
                 content = _request_provider(
                     provider,
@@ -274,7 +346,6 @@ def chat(
                     timeout=timeout,
                 )
                 if content:
-                    _advance_cursor(offset + 1, len(ordered))
                     return content
                 last_error = f"{provider['name']}: empty response"
             except urllib.error.HTTPError as err:
@@ -295,7 +366,6 @@ def chat(
         if attempt < rounds - 1:
             time.sleep(min(1.5 * (2 ** attempt), 6.0))
 
-    _advance_cursor(1, len(providers))
     if last_error:
         logger.debug("[LLM] Last remote failure: %s", last_error)
     return None
@@ -345,6 +415,7 @@ def chat_json(messages: list[dict], max_tokens: int = 1500, temperature: float =
             force_json=True,
             retries=2,
             timeout=DEFAULT_HTTP_TIMEOUT_SECONDS,
+            task="json",
         )
         if not raw:
             continue

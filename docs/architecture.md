@@ -1,7 +1,7 @@
 # AIDE v5 Web Architecture
 
 ## Goal
-Move from Streamlit-only UI to API + web frontend while keeping Python ML/physics/LLM logic unchanged.
+API + web frontend with Python ML/physics/LLM logic unchanged.
 
 ## Runtime Components
 - `backend/app/main.py`: FastAPI app.
@@ -23,10 +23,12 @@ Utility endpoints:
 - `GET /health`
 - `GET /api/v1/domains`
 
-## Local LLM Strategy
-- Use local model for intent parsing and explanation generation.
-- Keep physics scoring and ML predictions in deterministic Python modules.
-- Avoid forcing LLM to replace domain calculations.
+## LLM Strategy
+- All LLM usage is remote-only, routed through `llms/client.py` gateway.
+- Free-first provider ordering: OpenRouter free → Gemini → Groq → xAI.
+- Physics scoring and ML predictions remain deterministic Python modules.
+- LLM is used for intent parsing, research, composition proposals, and explanations.
+- When no API key is configured, rule-based fallback handles all paths.
 
 ## Migration Path
 1. Keep Streamlit app active.
@@ -40,8 +42,7 @@ Utility endpoints:
 - CORS controlled by `AIDE_API_CORS_ORIGINS`.
 
 ## Deployment Assets
-- deploy/backend.Dockerfile and root Dockerfile for API container deployment.
-- deploy/FREE_DEPLOY.md for free-tier hosting runbook.
-- deploy/prepare_hf_space.ps1 to build a Hugging Face Space bundle.
-- rontend/wrangler.toml and rontend/_headers for Cloudflare Pages static hosting.
-
+- `deploy/backend.Dockerfile` and root `Dockerfile` for API container deployment.
+- `deploy/FREE_DEPLOY.md` for free-tier hosting runbook.
+- `deploy/prepare_hf_space.ps1` to build a Hugging Face Space bundle.
+- `frontend/wrangler.toml` and `frontend/_headers` for Cloudflare Pages static hosting.

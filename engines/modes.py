@@ -53,19 +53,17 @@ class DesignEngine:
         alloy = intent.get("alloy_name", "")
         props = ", ".join(intent.get("target_properties", []))
         base_query = intent.get("notes", "")
-        query_parts = []
-        if alloy:
-            query_parts.append(f"alloy {alloy}")
-        if intent.get("application"):
-            query_parts.append(f"application {intent['application']}")
-        if props:
-            query_parts.append(f"target properties {props}")
         if base_query:
-            query_parts.append(base_query)
-        if not query_parts:
-            query = "general alloy design"
+            query = base_query
         else:
-            query = "; ".join(dict.fromkeys(query_parts))
+            query_parts = []
+            if alloy:
+                query_parts.append(f"alloy {alloy}")
+            if intent.get("application"):
+                query_parts.append(f"application {intent['application']}")
+            if props:
+                query_parts.append(f"target properties {props}")
+            query = "; ".join(dict.fromkeys(query_parts)) if query_parts else "general alloy design"
         T_K = intent.get("temperature_K") or 298.0
         weather = intent.get("environment")
         top_n = min(intent.get("n_results") or 10, 20)
@@ -76,8 +74,20 @@ class DesignEngine:
                               dpa_rate=intent.get("dpa_rate", 1e-7),
                               pressure_MPa=intent.get("pressure_MPa", 0.0),
                               **pipeline_kwargs)
+        def physics_score(candidate):
+            if candidate.physics_result and "composite_score" in candidate.physics_result:
+                return float(candidate.physics_result["composite_score"])
+            return None
+
         top = []
+        physics_scores = []
+        screening_scores = []
         for cand in result.candidates:
+            pscore = physics_score(cand)
+            if pscore is not None:
+                physics_scores.append(pscore)
+            elif cand.screening_score is not None:
+                screening_scores.append(float(cand.screening_score))
             if cand.physics_evaluated and cand.physics_result and "composite_score" in cand.physics_result:
                 top.append((cand.composition, cand.physics_result))
                 if len(top) >= top_n:
@@ -92,13 +102,19 @@ class DesignEngine:
                                 "agent": s.agent} for s in result.steps],
             "iterations": result.iterations_run, "converged": result.converged,
             "best_score": result.best_score, "total_time": result.total_time,
+            "best_rank_score": result.best_score,
+            "best_physics_score": max(physics_scores) if physics_scores else None,
+            "best_screening_score": max(screening_scores) if screening_scores else None,
             "explanation": result.explanation,
             "correlation_insights": result.correlation_insights,
             "generation_stats": result.generation_stats,
             "pipeline_config": pipeline_kwargs,
             "candidates_detail": [{"composition": c.composition,
                                    "composition_wt": c.composition_wt,
-                                   "rationale": c.rationale, "score": c.score,
+                                   "rationale": c.rationale,
+                                   "score": c.score,
+                                   "rank_score": c.score,
+                                   "physics_score": physics_score(c),
                                    "screening_score": c.screening_score,
                                    "score_source": c.score_source,
                                    "physics_evaluated": c.physics_evaluated,

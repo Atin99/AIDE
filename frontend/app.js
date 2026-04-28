@@ -527,7 +527,9 @@ function showMetrics(data, result) {
   if (result.n_pass != null) cards.push({ label: "Pass", value: result.n_pass });
   if (result.n_warn != null) cards.push({ label: "Warn", value: result.n_warn });
   if (result.n_fail != null) cards.push({ label: "Fail", value: result.n_fail });
-  if (result.best_score != null) cards.push({ label: "Best Score", value: Number(result.best_score).toFixed(1) });
+  if (result.best_physics_score != null) cards.push({ label: "Best Physics", value: Number(result.best_physics_score).toFixed(1) });
+  if (result.best_rank_score != null) cards.push({ label: "Best Rank", value: Number(result.best_rank_score).toFixed(1) });
+  else if (result.best_score != null) cards.push({ label: "Best Score", value: Number(result.best_score).toFixed(1) });
   if (result.n_candidates != null) cards.push({ label: "Candidates", value: result.n_candidates });
   if (result.n_physics_evaluated != null) cards.push({ label: "Physics Eval", value: result.n_physics_evaluated });
   if (result.iterations != null) cards.push({ label: "Iterations", value: result.iterations });
@@ -661,17 +663,28 @@ function renderCandidatesTable(data) {
   container.classList.remove("hidden");
   var title = detail.length ? "Candidate Pool (" + detail.length + " returned)" : "Top Candidates";
   var html = '<h3 style="margin: 16px 0 8px; font-size: 1rem;">' + escapeHtml(title) + '</h3>';
-  html += '<table><thead><tr><th>#</th><th>Type</th><th>Iter</th><th>Score</th><th>Source</th><th>Composition</th></tr></thead><tbody>';
+  html += '<table><thead><tr><th>#</th><th>Type</th><th>Iter</th><th>Physics</th><th>Rank</th><th>Source</th><th>Composition</th></tr></thead><tbody>';
 
   if (detail.length) {
     detail.forEach(function(cd, i) {
       var badgeCls = cd.result_type === "catalog" ? "badge-catalog" : "badge-generated";
       var badgeText = cd.result_type === "catalog" ? "CATALOG" : "GENERATED";
-      var source = cd.physics_evaluated ? "PHYSICS" : String(cd.score_source || "SCREEN").toUpperCase();
+      var scoreSource = String(cd.score_source || "").toLowerCase();
+      var hasRejection = (cd.weak_domains || []).some(function(w) {
+        return String((w && w.name) || "").toLowerCase().indexOf("rejection") >= 0;
+      });
+      var source = "SCREEN ONLY";
+      if (cd.physics_evaluated && hasRejection) source = "REJECTED";
+      else if (cd.physics_evaluated && scoreSource === "physics_ml") source = "PHYSICS+ML";
+      else if (cd.physics_evaluated) source = "PHYSICS";
+      else if (scoreSource.indexOf("reject") >= 0) source = "REJECTED";
+      var physicsScore = cd.physics_score != null ? Number(cd.physics_score) : null;
+      var rankScore = cd.rank_score != null ? Number(cd.rank_score) : (cd.score != null ? Number(cd.score) : null);
       html += '<tr><td>' + (i + 1) + '</td>';
       html += '<td><span class="badge ' + badgeCls + '">' + badgeText + '</span></td>';
       html += '<td>' + ((cd.iteration != null ? Number(cd.iteration) + 1 : "-")) + '</td>';
-      html += '<td>' + (cd.score != null ? Number(cd.score).toFixed(1) : "?") + '</td>';
+      html += '<td>' + (physicsScore != null ? physicsScore.toFixed(1) : "-") + '</td>';
+      html += '<td>' + (rankScore != null ? rankScore.toFixed(1) : "-") + '</td>';
       html += '<td>' + escapeHtml(source) + '</td>';
       html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(cd.composition_wt || cd.composition || {}, 5)) + '</td></tr>';
     });
@@ -682,6 +695,7 @@ function renderCandidatesTable(data) {
       html += '<tr><td>' + (i + 1) + '</td>';
       html += '<td><span class="badge badge-generated">GENERATED</span></td>';
       html += '<td>-</td>';
+      html += '<td>' + (r.composite_score != null ? Number(r.composite_score).toFixed(1) : "?") + '</td>';
       html += '<td>' + (r.composite_score != null ? Number(r.composite_score).toFixed(1) : "?") + '</td>';
       html += '<td>PHYSICS</td>';
       html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(comp, 5)) + '</td></tr>';

@@ -3,10 +3,10 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rag.retriever import retrieve, rag_available
-from llms.groq_client import chat, is_available as llm_available
+from llms.client import chat, is_available as llm_available
 
 
-SYSTEM_PROMPT = """You are AIDE v3, an expert computational metallurgist.
+SYSTEM_PROMPT = """You are AIDE v5, an expert computational metallurgist.
 You help explain alloy analysis results using retrieved literature.
 
 CRITICAL RULES:
@@ -79,7 +79,7 @@ def generate_explanation(query: str, top_alloy: dict,
     if papers:
         explanation += f" See: {papers[0]['source']}."
     if not llm_available():
-        explanation += " (Set GROQ_API_KEY for AI explanations.)"
+        explanation += " (Set a remote LLM key such as OPENROUTER_API_KEY for AI explanations.)"
     return explanation
 
 

@@ -18,14 +18,20 @@ AIDE (Alloy Intelligence and Design Engine) provides alloy analysis and design w
 - Computes weighted and raw composite scores with pass/warn/fail checks.
 - Supports application-aware weighting profiles.
 - Supports intent-driven and composition-driven workflows.
-- Uses local-first LLM reasoning with optional provider fallback.
+- Uses remote LLM reasoning with deterministic physics/ML fallback.
 
 ## Project Structure
 
-- `app.py` - Streamlit UI
-- `backend/app` - FastAPI backend wrapper
-- `frontend/` - HTML/CSS/JS client
-- `physics/`, `core/`, `engines/`, `llms/`, `ml/` - existing computation stack
+- `app.py` — Streamlit UI (Chat & Design, Composition Editor, Multi-Compare)
+- `backend/app` — FastAPI backend wrapper
+- `frontend/` — HTML/CSS/JS client
+- `physics/` — 42-domain physics evaluator
+- `core/` — elements, alloy database, data hub, query parser
+- `engines/` — design pipeline, researcher, engine modes
+- `llms/` — remote LLM gateway, intent parser, explainer, conversation memory
+- `ml/` — ML property predictor
+- `rag/` — literature retrieval enrichment
+- `tests/` — unit tests
 
 ## Quick Start (API + Web)
 
@@ -35,6 +41,7 @@ AIDE (Alloy Intelligence and Design Engine) provides alloy analysis and design w
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+copy .env.example .env   # then fill in your API keys
 uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 300
 ```
 
@@ -47,7 +54,13 @@ python -m http.server 5173
 
 3. Open `http://localhost:5173` and keep API base as `http://localhost:8000`.
 
-Long-running design requests now target a 5-minute browser/API window. `--timeout-keep-alive 300` helps prevent idle connection reuse from dropping, but if you deploy behind another proxy you may also need that platform's read/request timeout set to 300 seconds.
+Long-running design requests target a 5-minute browser/API window. `--timeout-keep-alive 300` helps prevent idle connections from dropping.
+
+## Streamlit Mode
+
+```powershell
+streamlit run app.py
+```
 
 ## API Design
 
@@ -68,45 +81,52 @@ Legacy compatibility endpoints:
 
 OpenAPI contract: `openapi.yaml`
 
-## Local LLM First Mode
+## Remote LLM Gateway
 
-Set these in `.env`:
+All LLM usage routes through one deterministic gateway in `llms/client.py`:
 
-- `AIDE_USE_LOCAL_LLM=1`
-- `AIDE_LOCAL_FIRST=1`
-- `AIDE_USE_LOCAL_INTENT=1`
-- `AIDE_USE_LLM_INTENT=0`
-- `AIDE_LOCAL_LLM_URL=http://127.0.0.1:11434`
-- `AIDE_LOCAL_LLM_MODELS=phi3:mini`
-- `AIDE_ENABLE_REMOTE_LLM=0`
-- `AIDE_LOCAL_INTENT_MODELS=phi3:mini`
-- `AIDE_LOCAL_INTENT_MODEL_TRIES=3`
+| Priority | Provider | Model | Tier |
+|----------|----------|-------|------|
+| 1 | OpenRouter (fixed) | `openai/gpt-oss-20b:free` | Free |
+| 2 | OpenRouter (router) | `openrouter/free` | Free |
+| 3 | Gemini | `gemini-2.5-flash` | Metered |
+| 4 | Groq | `llama-3.1-8b-instant` | Metered |
+| 5 | xAI Grok | `grok-3-mini` | Metered |
 
-This keeps most reasoning local while Python physics/ML scoring remains deterministic.
-.
-
-## Streamlit Mode
-
-```powershell
-streamlit run app.py
-```
+Physics, ML scoring, ranking, and candidate generation are fully deterministic.
+Remote LLMs are used for: intent parsing, application research, composition proposals, explanations, and chat.
+When no API key is configured, the app falls back to rule-based intent parsing and template generation.
 
 ## Environment Variables
 
-- `GEMINI_API_KEY`
-- `DEEPSEEK_API_KEY`
-- `GROQ_API_KEY`
-- `AIDE_GROQ_MODEL`
-- `AIDE_LLM_HTTP_TIMEOUT_SECONDS`
-- `AIDE_USE_LOCAL_LLM`
-- `AIDE_LOCAL_FIRST`
-- `AIDE_ENABLE_REMOTE_LLM`
-- `AIDE_LOCAL_LLM_URL`
-- `AIDE_LOCAL_LLM_MODELS`
-- `AIDE_LOCAL_INTENT_MODELS`
-- `AIDE_LOCAL_INTENT_MODEL_TRIES`
-- `AIDE_API_CORS_ORIGINS`
-- `AIDE_PROXY_TIMEOUT_MS`
+### Required (at least one API key)
+
+- `OPENROUTER_API_KEY` — primary free-tier provider
+- `GEMINI_API_KEY` — Google Gemini
+- `GROQ_API_KEY` — Groq cloud
+- `XAI_API_KEY` — xAI Grok (optional)
+
+### LLM Configuration
+
+- `AIDE_ENABLE_REMOTE_LLM` — `1` to enable, `0` to disable all remote calls
+- `AIDE_USE_LLM_INTENT` — `1` to use LLM for intent parsing (default: `1`)
+- `AIDE_USE_LLM_RESEARCH` — `1` to use LLM for application research (default: `1`)
+- `AIDE_USE_LLM_GENERATION` — `1` to use LLM for composition proposals (default: `1`)
+- `AIDE_OPENROUTER_MODEL` — override OpenRouter model
+- `AIDE_OPENROUTER_ROUTER_MODEL` — override OpenRouter free router model
+- `AIDE_GEMINI_MODEL` — override Gemini model
+- `AIDE_GROQ_MODEL` — override Groq model
+- `AIDE_XAI_MODEL` — override xAI model
+- `AIDE_LLM_PROVIDER_ORDER` — comma-separated provider fallback order for chat
+- `AIDE_LLM_JSON_PROVIDER_ORDER` — comma-separated provider fallback order for JSON tasks
+- `AIDE_OPENROUTER_TITLE` — app title sent to OpenRouter
+- `AIDE_OPENROUTER_REFERER` — referer header for OpenRouter
+- `AIDE_LLM_HTTP_TIMEOUT_SECONDS` — HTTP timeout (default: `45`)
+
+### API Server
+
+- `AIDE_API_CORS_ORIGINS` — CORS allowed origins (default: `*`)
+- `AIDE_PROXY_TIMEOUT_MS` — proxy timeout in milliseconds
 
 ## Contributing
 
@@ -115,8 +135,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
-
-
-
-
-

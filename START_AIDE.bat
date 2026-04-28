@@ -23,6 +23,9 @@ cd /d "%~dp0"
 
 REM Pick a working Python interpreter.
 echo [2/3] Setting up environment...
+set "AIDE_USE_LLM_INTENT=1"
+set "AIDE_USE_LLM_RESEARCH=1"
+set "AIDE_USE_LLM_GENERATION=1"
 set "PYTHON_EXE=python"
 set "PYTHON_LABEL=system"
 if exist ".venv312\Scripts\python.exe" (

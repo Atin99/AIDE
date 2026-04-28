@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from llms.client import get_available_providers
+from llms.client import remote_llm_enabled
 
 from .schemas import ApiResponse
 from .schemas import CompositionAnalyzeRequest
@@ -37,8 +38,11 @@ async def app_lifespan(_: FastAPI):
     """Emit startup diagnostics once for the remote-only API runtime."""
     logger.info("AIDE v5 API starting")
     logger.info("CORS origins: %s", origins)
-    providers = [provider["name"] for provider in get_available_providers()]
-    logger.info("Remote LLM mode: enabled")
+    providers = [
+        f"{provider['label']} [{provider['model']}]"
+        for provider in get_available_providers()
+    ]
+    logger.info("Remote LLM mode: %s", "enabled" if remote_llm_enabled() else "disabled")
     logger.info("Configured remote LLM providers: %s", providers or ["none"])
     yield
 
@@ -93,11 +97,29 @@ def root():
 
 @app.get("/health", response_model=ApiResponse)
 def health():
+    providers = get_available_providers()
     return {
         "ok": True,
         "data": {
             "status": "healthy",
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "reasoning_pipeline": {
+                "intent_llm_enabled": os.environ.get("AIDE_USE_LLM_INTENT", "1").strip().lower() in {"1", "true", "yes", "on"},
+                "research_llm_enabled": os.environ.get("AIDE_USE_LLM_RESEARCH", "1").strip().lower() in {"1", "true", "yes", "on"},
+                "generation_llm_enabled": os.environ.get("AIDE_USE_LLM_GENERATION", "1").strip().lower() in {"1", "true", "yes", "on"},
+            },
+            "remote_llm": {
+                "enabled": remote_llm_enabled(),
+                "providers": [
+                    {
+                        "name": provider["name"],
+                        "label": provider.get("label", provider["name"]),
+                        "model": provider["model"],
+                        "tier": provider.get("tier", "unknown"),
+                    }
+                    for provider in providers
+                ],
+            },
         },
     }
 

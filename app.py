@@ -715,7 +715,7 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.caption("Set GEMINI_API_KEY or GROQ_API_KEY in .env for full LLM reasoning")
+    st.caption("Set OPENROUTER_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, or XAI_API_KEY in .env for full LLM reasoning")
     from llms.client import is_available
     if is_available():
         st.success("Remote LLM Connected")
@@ -1077,26 +1077,79 @@ with tab_editor:
 
 with tab_compare:
     st.subheader("Multi-Alloy Comparison")
-    st.caption("Select 2–5 alloys from the database and compare across all domains")
+    st.caption("Compare preset alloys and/or your own custom compositions across all 42 domains")
 
     alloy_options = list(ALLOY_DATABASE.keys())
     selected_alloys = st.multiselect(
-        "Select alloys to compare",
+        "Select preset alloys",
         options=alloy_options,
         default=alloy_options[:2] if len(alloy_options) >= 2 else alloy_options,
         max_selections=5,
+        key="compare_presets",
     )
 
+    # Custom composition entry
+    st.markdown("---")
+    st.markdown("**Add Custom Composition**")
+    st.caption("Enter element percentages (wt%) separated by commas, e.g. `Fe:68, Cr:17, Ni:12, Mo:2.5`")
+
+    if "custom_compare_comps" not in st.session_state:
+        st.session_state.custom_compare_comps = []
+
+    custom_input = st.text_input(
+        "Custom composition (wt%)",
+        placeholder="Fe:68, Cr:17, Ni:12, Mo:2.5",
+        key="custom_comp_input",
+    )
+    custom_label = st.text_input(
+        "Label for this composition",
+        placeholder="My Marine SS",
+        key="custom_comp_label",
+    )
+
+    if st.button("Add Custom", key="add_custom_comp_btn"):
+        if custom_input.strip():
+            try:
+                pairs = [p.strip() for p in custom_input.replace(";", ",").split(",") if ":" in p]
+                parsed = {}
+                for pair in pairs:
+                    sym, val = pair.split(":", 1)
+                    parsed[sym.strip()] = float(val.strip()) / 100.0
+                total = sum(parsed.values())
+                if total < 0.5 or total > 1.5:
+                    st.error(f"Total is {total*100:.1f}% — must be near 100%.")
+                else:
+                    parsed = {k: v / total for k, v in parsed.items()}
+                    label = custom_label.strip() or f"Custom-{len(st.session_state.custom_compare_comps)+1}"
+                    st.session_state.custom_compare_comps.append({"label": label, "comp_wt": parsed})
+                    st.success(f"Added: {label}")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Parse error: {e}. Use format `Fe:68, Cr:17, Ni:12`")
+
+    if st.session_state.custom_compare_comps:
+        st.markdown("**Custom compositions queued:**")
+        for i, cc in enumerate(st.session_state.custom_compare_comps):
+            st.caption(f"• {cc['label']}: {fmt_comp(cc['comp_wt'], 6)}")
+        if st.button("Clear Custom", key="clear_custom_comps"):
+            st.session_state.custom_compare_comps = []
+            st.rerun()
+
+    st.markdown("---")
     T_compare = st.slider("Temperature (K)", 77, 7000, 298, 10, key="T_compare")
 
+    total_to_compare = len(selected_alloys) + len(st.session_state.custom_compare_comps)
+
     if st.button("Compare All", type="primary", use_container_width=True, key="compare_btn"):
-        if len(selected_alloys) < 2:
-            st.warning("Select at least 2 alloys to compare.")
+        if total_to_compare < 2:
+            st.warning("Select at least 2 alloys (preset and/or custom) to compare.")
         else:
             alloy_data = []
             score_rows = []
+            cost_items = []
 
-            with st.spinner(f"Analyzing {len(selected_alloys)} alloys..."):
+            with st.spinner(f"Analyzing {total_to_compare} alloys..."):
+                # Process preset alloys
                 for alloy_name in selected_alloys:
                     alloy = ALLOY_DATABASE.get(alloy_name, {})
                     comp_wt = alloy.get("composition_wt", {})
@@ -1121,6 +1174,33 @@ with tab_compare:
                     for dr in result["domain_results"]:
                         row[dr.domain_name[:15]] = round(dr.score(), 1)
                     score_rows.append(row)
+                    cost_items.append({"name": alloy_name, "comp_wt": comp_wt})
+
+                # Process custom compositions
+                for cc in st.session_state.custom_compare_comps:
+                    comp_wt = cc["comp_wt"]
+                    label = cc["label"]
+                    try:
+                        comp_mol = validate_composition(wt_to_mol(comp_wt))
+                    except Exception:
+                        try:
+                            comp_mol = validate_composition(comp_wt)
+                        except Exception:
+                            st.warning(f"Skipped {label}: invalid composition")
+                            continue
+
+                    result = run_all(comp_mol, T_K=T_compare, verbose=False)
+                    alloy_data.append((label, result["domain_results"]))
+
+                    row = {"Alloy": label,
+                           "Score": round(result["composite_score"], 1),
+                           "Pass": result["n_pass"],
+                           "Warn": result["n_warn"],
+                           "Fail": result["n_fail"]}
+                    for dr in result["domain_results"]:
+                        row[dr.domain_name[:15]] = round(dr.score(), 1)
+                    score_rows.append(row)
+                    cost_items.append({"name": label, "comp_wt": comp_wt})
 
             if alloy_data:
                 st.subheader("Summary")
@@ -1129,7 +1209,7 @@ with tab_compare:
                             use_container_width=True, hide_index=True)
 
                 best = max(score_rows, key=lambda r: r["Score"])
-                st.markdown(f"** Best overall: {best['Alloy']} ({best['Score']}/100)**")
+                st.markdown(f"**Best overall: {best['Alloy']} ({best['Score']}/100)**")
 
                 st.plotly_chart(make_multi_radar(alloy_data),
                                use_container_width=True)
@@ -1146,11 +1226,9 @@ with tab_compare:
 
                 hub = get_hub()
                 cost_rows = []
-                for alloy_name in selected_alloys:
-                    alloy = ALLOY_DATABASE.get(alloy_name, {})
-                    comp_wt = alloy.get("composition_wt", {})
-                    cost = hub.estimate_cost(comp_wt)
-                    cost_rows.append({"Alloy": alloy_name,
+                for item in cost_items:
+                    cost = hub.estimate_cost(item["comp_wt"])
+                    cost_rows.append({"Alloy": item["name"],
                                       "Cost ($/kg)": f"${cost:.2f}" if cost else "N/A"})
                 st.dataframe(pd.DataFrame(cost_rows),
                             use_container_width=True, hide_index=True)
@@ -1158,3 +1236,4 @@ with tab_compare:
 
 st.markdown("---")
 st.caption("AIDE v5.0 | 42 Physics Domains | Multi-Agent Reasoning | Conversational AI")
+

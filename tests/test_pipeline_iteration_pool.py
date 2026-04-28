@@ -8,7 +8,7 @@ os.environ.setdefault("AIDE_USE_LLM_INTENT", "0")
 os.environ.setdefault("AIDE_USE_LOCAL_LLM", "0")
 
 from engines.modes import DesignEngine
-from engines.pipeline import Candidate, PipelineResult, _build_feedback, run_pipeline
+from engines.pipeline import Candidate, PipelineResult, _build_feedback, _candidate_sort_key, run_pipeline
 
 
 def _candidate(tag, score=0.0, physics_evaluated=False):
@@ -39,6 +39,17 @@ def _candidate(tag, score=0.0, physics_evaluated=False):
 
 
 class PipelineIterationPoolTests(unittest.TestCase):
+    def test_physics_candidates_sort_above_screen_only_candidates(self):
+        screen = _candidate("c", score=100.0, physics_evaluated=False)
+        physics = _candidate("a", score=0.0, physics_evaluated=True)
+        physics.physics_result = {"composite_score": 59.7, "domain_results": [], "n_domains": 0}
+        physics.screening_score = 100.0
+
+        ranked = sorted([screen, physics], key=_candidate_sort_key, reverse=True)
+
+        self.assertIs(ranked[0], physics)
+        self.assertIs(ranked[1], screen)
+
     def test_feedback_is_pruned_to_top_three_failures(self):
         candidates = [
             _candidate("a", score=84.0, physics_evaluated=True),
@@ -131,6 +142,10 @@ class PipelineIterationPoolTests(unittest.TestCase):
         self.assertEqual(len(result["top"]), 2)
         self.assertEqual(len(result["candidates_detail"]), 4)
         self.assertEqual(result["pipeline_config"]["max_iterations"], 4)
+        self.assertEqual(result["best_physics_score"], 81.0)
+        self.assertEqual(result["best_rank_score"], 81.0)
+        self.assertEqual(result["candidates_detail"][0]["physics_score"], 81.0)
+        self.assertIsNone(result["candidates_detail"][2]["physics_score"])
 
 
 if __name__ == "__main__":

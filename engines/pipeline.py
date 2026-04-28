@@ -12,6 +12,30 @@ logger = logging.getLogger("AIDE.pipeline")
 FUSIBLE_ELEMENTS = {"Bi", "Sn", "In", "Ga", "Pb", "Cd", "Sb", "Zn", "Hg", "Tl"}
 ELECTRONIC_ELEMENTS = {"Cu", "Al", "Ag", "Au", "Sn", "In", "Ga", "Si", "Ge", "Pd", "Pt", "Sb", "As"}
 HIGH_MELT_STRUCTURAL_ELEMENTS = {"Fe", "Cr", "Ni", "Co", "Mo", "W", "Nb", "Ta", "Ti", "V", "Zr", "Hf"}
+HOT_SECTION_MARKERS = {
+    "hot section", "gas path", "gas turbine", "turbine", "turbine blade", "blade",
+    "jet engine", "combustor", "afterburner", "exhaust nozzle", "stress rupture",
+}
+AEROSPACE_STRUCTURE_MARKERS = {
+    "airframe", "fuselage", "wing", "wing spar", "skin", "panel", "bulkhead",
+    "frame", "aircraft body", "jet body", "body shell", "aerospace structural",
+    "aircraft frame", "aircraft structure",
+}
+HEAVY_STRUCTURE_MARKERS = {
+    "crane", "boom", "gantry", "hoist", "frame", "chassis", "body", "bridge",
+    "girder", "beam", "bucket", "loader", "excavator", "trailer", "truck body",
+    "load bearing", "load-bearing",
+}
+LIGHTWEIGHT_QUERY_MARKERS = {"lightweight", "low density", "mass critical", "weight critical"}
+LIGHTWEIGHT_HEAVY_ELEMENT_WEIGHTS = {
+    "W": 2.5,
+    "Re": 4.0,
+    "Ta": 3.0,
+    "Hf": 3.0,
+    "Mo": 1.5,
+    "Nb": 1.0,
+    "Co": 0.8,
+}
 
 @dataclass
 class PipelineStep:
@@ -66,6 +90,31 @@ def _normalize_wt(comp):
     return {k: v / total for k, v in comp.items() if v > 1e-6}
 
 
+def _normalize_element_symbol(symbol):
+    token = str(symbol or "").strip()
+    if not token:
+        return None
+    if len(token) == 1:
+        return token.upper()
+    return token[0].upper() + token[1:].lower()
+
+
+def _normalize_element_map(raw_comp):
+    cleaned = {}
+    for symbol, value in (raw_comp or {}).items():
+        normalized = _normalize_element_symbol(symbol)
+        if not normalized:
+            continue
+        try:
+            numeric = float(value)
+        except Exception:
+            continue
+        if numeric <= 0.001:
+            continue
+        cleaned[normalized] = cleaned.get(normalized, 0.0) + numeric
+    return cleaned
+
+
 def _set_floor(wt, symbol, minimum):
     current = wt.get(symbol, 0.0)
     if current >= minimum:
@@ -81,6 +130,65 @@ def _set_floor(wt, symbol, minimum):
         wt[key] *= scale
     wt[symbol] = minimum
     return _normalize_wt(wt)
+
+
+def _apply_caps(wt, caps):
+    for symbol, cap in caps.items():
+        if symbol in wt:
+            wt[symbol] = min(wt[symbol], cap)
+    return _normalize_wt(wt)
+
+
+def _contains_any(text, markers):
+    return any(marker in text for marker in markers)
+
+
+def _structured_llm_generation_enabled():
+    value = os.environ.get("AIDE_USE_LLM_GENERATION", "1").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _is_hot_section_query(text):
+    return _contains_any(text, HOT_SECTION_MARKERS) or (
+        "jet" in text and any(marker in text for marker in ["engine", "turbine", "blade", "combustor", "nozzle"])
+    )
+
+
+def _is_aerospace_structure_query(text):
+    return _contains_any(text, AEROSPACE_STRUCTURE_MARKERS) or (
+        any(marker in text for marker in ["aircraft", "aerospace", "airplane", "plane", "jet"])
+        and any(marker in text for marker in ["body", "frame", "fuselage", "wing", "skin", "panel", "spar", "structure", "structural"])
+    )
+
+
+def _is_heavy_structure_query(text):
+    return _contains_any(text, HEAVY_STRUCTURE_MARKERS)
+
+
+def _is_lightweight_query(text, props=None):
+    props = set(props or [])
+    return "low_density" in props or _contains_any(text, LIGHTWEIGHT_QUERY_MARKERS)
+
+
+def _density_target_for_intent(application, constraints=None, props=None, query=""):
+    constraints = dict(constraints or {})
+    if constraints.get("max_density"):
+        return float(constraints["max_density"])
+    if not _is_lightweight_query((query or "").lower(), props):
+        return None
+    defaults = {
+        "al_alloy": 3.3,
+        "ti_alloy": 5.2,
+        "superalloy": 7.8,
+        "stainless": 7.4,
+        "structural": 5.6,
+        "general_structural": 5.6,
+        "open_alloy": 5.6,
+        "carbon_steel": 5.8,
+        "nuclear": 7.0,
+        "biomedical": 6.0,
+    }
+    return float(defaults.get((application or "").lower(), 5.8))
 
 
 def _intent_required_elements(intent, query=""):
@@ -119,6 +227,9 @@ def _intent_required_elements(intent, query=""):
             must.add("Cu")
     if app == "stainless":
         must.add("Cr")
+        # Austenitic stainless (marine, corrosion) needs Ni; ferritic does not
+        if "Ni" not in exclude and not any(k in q for k in ["ferritic", "430", "409", "no nickel", "ni-free"]):
+            must.add("Ni")
     if app == "superalloy":
         if "Ni" not in exclude:
             must.add("Ni")
@@ -167,7 +278,7 @@ def _intent_required_elements(intent, query=""):
                 must.add("C")
             if "V" not in exclude:
                 must.add("V")
-            if "W" not in exclude:
+            if any(k in q for k in ["tungsten", "w-based", "hot hardness"]) and "W" not in exclude:
                 must.add("W")
 
     if constraints.get("cost_level") == "low":
@@ -179,18 +290,28 @@ def _intent_required_elements(intent, query=""):
 
 def _default_seed_for_application(application):
     app = (application or "").lower()
+    # Metallurgically accurate default seeds — these match real commercial alloy families
     seeds = {
         "fusible_alloy": {"Sn": 0.52, "Bi": 0.28, "In": 0.14, "Ag": 0.04, "Cu": 0.02},
         "electronic_alloy": {"Cu": 0.74, "Sn": 0.12, "Ag": 0.07, "Au": 0.03, "Si": 0.02, "In": 0.02},
-        "stainless": {"Fe": 0.66, "Cr": 0.19, "Ni": 0.08, "Mo": 0.04, "Mn": 0.02, "N": 0.01},
+        # 316L-type austenitic stainless (the most common marine/corrosion grade)
+        "stainless": {"Fe": 0.645, "Cr": 0.17, "Ni": 0.12, "Mo": 0.025, "Mn": 0.02, "Si": 0.01, "C": 0.002, "N": 0.008},
+        # A36-type plain structural
         "structural": {"Fe": 0.95, "Mn": 0.02, "Si": 0.02, "C": 0.01},
         "general_structural": {"Fe": 0.95, "Mn": 0.02, "Si": 0.02, "C": 0.01},
+        # AISI 1040-type medium carbon
         "carbon_steel": {"Fe": 0.975, "Mn": 0.012, "Si": 0.008, "C": 0.005},
-        "superalloy": {"Ni": 0.56, "Cr": 0.18, "Co": 0.10, "Mo": 0.06, "Al": 0.04, "Ti": 0.03, "Fe": 0.03},
+        # IN718-type Ni superalloy
+        "superalloy": {"Ni": 0.53, "Cr": 0.19, "Fe": 0.18, "Nb": 0.05, "Mo": 0.03, "Ti": 0.01, "Al": 0.005, "Co": 0.005},
+        # Ti-6Al-4V
         "ti_alloy": {"Ti": 0.89, "Al": 0.06, "V": 0.04, "Fe": 0.01},
-        "al_alloy": {"Al": 0.93, "Mg": 0.03, "Si": 0.02, "Cu": 0.015, "Mn": 0.005},
-        "cu_alloy": {"Cu": 0.90, "Zn": 0.08, "Ni": 0.02},
+        # 6061-type
+        "al_alloy": {"Al": 0.965, "Mg": 0.01, "Si": 0.006, "Cu": 0.003, "Cr": 0.002, "Fe": 0.007, "Mn": 0.002, "Zn": 0.005},
+        # C26000 brass
+        "cu_alloy": {"Cu": 0.70, "Zn": 0.28, "Pb": 0.01, "Fe": 0.01},
+        # Zircaloy-4
         "nuclear": {"Zr": 0.97, "Sn": 0.015, "Fe": 0.008, "Cr": 0.007},
+        # Ti-6Al-7Nb biomedical
         "biomedical": {"Ti": 0.84, "Nb": 0.10, "Zr": 0.04, "Ta": 0.02},
         "open_alloy": {"Fe": 0.22, "Ni": 0.20, "Cr": 0.18, "Co": 0.15, "Ti": 0.12, "Al": 0.13},
     }
@@ -217,6 +338,7 @@ def _apply_intent_to_wt(wt, intent, query=""):
     constraints = dict(intent.get("constraints", {}) or {})
     props = set(intent.get("target_properties", []) or [])
     rd = intent.get("research_data")
+    app = intent.get("application") or ""
     family = (constraints.get("alloy_family") or "").lower()
     q = (query or "").lower()
 
@@ -229,6 +351,100 @@ def _apply_intent_to_wt(wt, intent, query=""):
         if symbol in exclude:
             continue
         wt = _set_floor(wt, symbol, 0.01)
+
+    if app == "stainless":
+        if "Fe" not in exclude:
+            wt = _set_floor(wt, "Fe", 0.50)
+        if "Cr" not in exclude:
+            wt = _set_floor(wt, "Cr", 0.12)
+        # Austenitic grades (marine, corrosion) need Ni; ferritic does not
+        is_ferritic = any(k in q for k in ["ferritic", "430", "409", "ni-free"])
+        if "Ni" not in exclude and not is_ferritic:
+            ni_floor = 0.08  # default austenitic minimum
+            if any(k in q for k in ["marine", "seawater", "chloride", "316", "pitting", "offshore"]):
+                ni_floor = 0.10  # marine austenitic needs higher Ni
+            elif any(k in q for k in ["duplex", "2205", "2507"]):
+                ni_floor = 0.05  # duplex has lower Ni
+            wt = _set_floor(wt, "Ni", ni_floor)
+        if "Mo" not in exclude and any(k in q for k in ["marine", "chloride", "seawater", "pitting", "316", "offshore"]):
+            wt = _set_floor(wt, "Mo", 0.02)
+        wt = _apply_caps(wt, {
+            "Re": 0.005, "Ta": 0.01, "Hf": 0.005, "W": 0.05, "Co": 0.08,
+            "Nb": 0.08, "Al": 0.03, "Ga": 0.01, "In": 0.01, "Bi": 0.005,
+            "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
+        })
+
+    if app in {"structural", "general_structural"}:
+        if "Fe" not in exclude:
+            wt = _set_floor(wt, "Fe", 0.65)
+        wt = _apply_caps(wt, {
+            "C": 0.02, "Cr": 0.10, "Mn": 0.12, "Si": 0.05, "Cu": 0.05,
+            "Ni": 0.10, "Co": 0.06, "Mo": 0.04, "V": 0.03, "Ti": 0.03,
+            "W": 0.01, "Nb": 0.03,
+            "Re": 0.005, "Ta": 0.005, "Hf": 0.005, "Bi": 0.005, "Pb": 0.0,
+            "Cd": 0.0, "Hg": 0.0,
+        })
+        if _is_heavy_structure_query(q) or "weldability" in props or "fatigue_resistance" in props:
+            if "Fe" not in exclude:
+                wt = _set_floor(wt, "Fe", 0.78)
+            wt = _apply_caps(wt, {
+                "C": 0.012, "Cr": 0.06, "Mn": 0.10, "Si": 0.04, "Cu": 0.04,
+                "Ni": 0.06, "Mo": 0.03, "V": 0.025, "Nb": 0.025, "Ti": 0.02,
+            })
+
+    if app == "carbon_steel":
+        if "Fe" not in exclude:
+            wt = _set_floor(wt, "Fe", 0.90)
+        if "C" not in exclude:
+            wt = _set_floor(wt, "C", 0.001)
+        wt = _apply_caps(wt, {
+            "Ni": 0.08, "Co": 0.03, "Cr": 0.12, "Mo": 0.06, "W": 0.02,
+            "Nb": 0.03, "Re": 0.002, "Ta": 0.002, "Hf": 0.002, "Pb": 0.0,
+            "Cd": 0.0, "Hg": 0.0,
+        })
+
+    if app == "superalloy":
+        if "Ni" not in exclude:
+            wt = _set_floor(wt, "Ni", 0.45)
+        elif "Co" not in exclude:
+            wt = _set_floor(wt, "Co", 0.30)
+        if "Cr" not in exclude:
+            wt = _set_floor(wt, "Cr", 0.08)
+        wt = _apply_caps(wt, {
+            "Fe": 0.25, "Cu": 0.05, "Zn": 0.02, "Ga": 0.02, "In": 0.02,
+            "Bi": 0.005, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
+        })
+
+    if app == "ti_alloy":
+        if "Ti" not in exclude:
+            wt = _set_floor(wt, "Ti", 0.70)
+        wt = _apply_caps(wt, {
+            "Ni": 0.03, "Co": 0.02, "Cu": 0.03, "W": 0.01, "Re": 0.005,
+            "Ta": 0.08, "Hf": 0.03, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
+        })
+
+    if app == "al_alloy":
+        if "Al" not in exclude:
+            wt = _set_floor(wt, "Al", 0.80)
+        wt = _apply_caps(wt, {
+            "W": 0.01, "Re": 0.005, "Ta": 0.005, "Hf": 0.005, "Nb": 0.02,
+            "Mo": 0.02, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
+        })
+
+    if app == "nuclear":
+        if "Zr" not in exclude:
+            wt = _set_floor(wt, "Zr", 0.78)
+        wt = _apply_caps(wt, {
+            "Ni": 0.03, "Co": 0.02, "Cu": 0.02, "W": 0.02, "Re": 0.005,
+            "Ta": 0.01, "Hf": 0.02, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
+        })
+
+    if app == "biomedical":
+        if "Ti" not in exclude and "Co" in exclude:
+            wt = _set_floor(wt, "Ti", 0.55)
+        wt = _apply_caps(wt, {
+            "Pb": 0.0, "Cd": 0.0, "Hg": 0.0, "Bi": 0.005, "Ga": 0.02,
+        })
 
     if intent.get("application") == "cu_alloy":
         wt = _set_floor(wt, "Cu", 0.55)
@@ -327,6 +543,41 @@ def _apply_intent_to_wt(wt, intent, query=""):
             if high_resistivity_el in wt:
                 wt[high_resistivity_el] = min(wt[high_resistivity_el], cap)
 
+    density_target = _density_target_for_intent(app, constraints, props, q)
+    if density_target is not None:
+        aggressive = density_target <= 5.3
+        lightweight_caps = {
+            "W": 0.01 if aggressive else 0.04,
+            "Re": 0.002 if aggressive else 0.006,
+            "Ta": 0.015 if aggressive else 0.03,
+            "Hf": 0.01 if aggressive else 0.02,
+            "Mo": 0.04 if aggressive else 0.06,
+            "Nb": 0.04 if aggressive else 0.08,
+            "Co": 0.08 if aggressive else 0.12,
+        }
+        if app in {"structural", "general_structural", "open_alloy", "ti_alloy", "al_alloy"}:
+            lightweight_caps.update({
+                "Ni": 0.12 if aggressive else 0.18,
+                "Fe": 0.25 if aggressive else 0.40,
+            })
+
+        wt = _apply_caps(wt, lightweight_caps)
+
+        if app == "ti_alloy" and "Ti" not in exclude:
+            wt = _set_floor(wt, "Ti", 0.78)
+        elif app == "al_alloy" and "Al" not in exclude:
+            wt = _set_floor(wt, "Al", 0.88)
+        elif app in {"structural", "general_structural", "open_alloy"}:
+            if _is_aerospace_structure_query(q) and "Ti" not in exclude:
+                wt = _set_floor(wt, "Ti", 0.45)
+            elif "Al" not in exclude:
+                wt = _set_floor(wt, "Al", 0.30)
+        elif app == "superalloy" and not _is_hot_section_query(q):
+            if "Ti" not in exclude:
+                wt = _set_floor(wt, "Ti", 0.08)
+            if "Al" not in exclude:
+                wt = _set_floor(wt, "Al", 0.05)
+
     if constraints.get("cost_level") == "low":
         caps = {"Ni": 0.08, "Co": 0.05, "Re": 0.01, "Ta": 0.01, "Hf": 0.01, "W": 0.06}
         for symbol, cap in caps.items():
@@ -343,6 +594,32 @@ def _apply_intent_to_wt(wt, intent, query=""):
         base = rd.base_elements[0]
         if base in wt:
             wt = _set_floor(wt, base, float(rd.base_min_fraction))
+
+    if app == "stainless":
+        if "Fe" not in exclude:
+            wt = _set_floor(wt, "Fe", 0.50)
+        if "Cr" not in exclude:
+            wt = _set_floor(wt, "Cr", 0.12)
+    elif app in {"structural", "general_structural"}:
+        if "Fe" not in exclude:
+            wt = _set_floor(wt, "Fe", 0.65)
+    elif app == "carbon_steel":
+        if "Fe" not in exclude:
+            wt = _set_floor(wt, "Fe", 0.90)
+    elif app == "superalloy":
+        if "Ni" not in exclude:
+            wt = _set_floor(wt, "Ni", 0.45)
+        elif "Co" not in exclude:
+            wt = _set_floor(wt, "Co", 0.30)
+    elif app == "ti_alloy":
+        if "Ti" not in exclude:
+            wt = _set_floor(wt, "Ti", 0.70)
+    elif app == "al_alloy":
+        if "Al" not in exclude:
+            wt = _set_floor(wt, "Al", 0.80)
+    elif app == "nuclear":
+        if "Zr" not in exclude:
+            wt = _set_floor(wt, "Zr", 0.78)
 
     for symbol in list(wt.keys()):
         if wt[symbol] < 0.001:
@@ -373,6 +650,49 @@ def _condition_candidate_with_intent(candidate, intent, query, reason_suffix):
         )
     except Exception:
         return candidate
+
+
+def _candidate_weight_like(candidate):
+    comp_wt = getattr(candidate, "composition_wt", None) or {}
+    if comp_wt:
+        return _normalize_wt(comp_wt)
+    comp = getattr(candidate, "composition", None) or {}
+    try:
+        return _normalize_wt(mol_to_wt(comp))
+    except Exception:
+        return _normalize_wt(comp)
+
+
+def _candidate_research_violation(candidate, research_data):
+    if not research_data:
+        return ""
+    comp_wt = _candidate_weight_like(candidate)
+    violated, reason = research_data.composition_violates_base(comp_wt)
+    return reason if violated else ""
+
+
+def _filter_candidates_against_research(candidates, research_data):
+    if not research_data:
+        return candidates, 0
+
+    aligned = []
+    rejected = []
+    for cand in candidates:
+        reason = _candidate_research_violation(cand, research_data)
+        if not reason:
+            aligned.append(cand)
+            continue
+        cand.screening_score = 0.0
+        if not cand.physics_evaluated:
+            cand.score = 0.0
+            cand.score_source = "rejected_screen"
+        if not any(w.get("name") == "Base Material Rejection" for w in cand.weak_domains):
+            cand.weak_domains.append({"name": "Base Material Rejection", "score": 0, "fails": [reason]})
+        rejected.append(cand)
+
+    if aligned:
+        return aligned, len(rejected)
+    return candidates, 0
 
 
 def _summarize_intent(intent, query):
@@ -466,6 +786,8 @@ class BaselinePredictor:
             return None
 
 def _llm_baseline(query, intent):
+    if not _structured_llm_generation_enabled():
+        return None
     from llms.client import chat_json
     parts = [
         "Propose one realistic starting alloy composition.",
@@ -511,7 +833,7 @@ Rules:
     if not result or "comp_wt" not in result:
         return None
     try:
-        wt = {k: float(v) for k, v in result["comp_wt"].items() if float(v) > 0.001}
+        wt = _normalize_element_map(result["comp_wt"])
         total = sum(wt.values())
         if total == 0:
             return None
@@ -519,7 +841,7 @@ Rules:
         mol = validate_composition(wt_to_mol(wt))
         
         if rd:
-            violated, reason = rd.composition_violates_base(mol)
+            violated, reason = rd.composition_violates_base(wt)
             if violated:
                 logger.warning(f"[BASELINE] LLM baseline violated constraint: {reason}")
                 return None
@@ -547,7 +869,7 @@ class MultiCompositionGenerator:
         initial_len = len(candidates)
         from llms.client import is_available
         if is_available():
-            llm_target = max(3, min(8, int(math.ceil(max(1, n) / 12.0))))
+            llm_target = max(4, min(8, int(math.ceil(max(1, n) * 0.75))))
             candidates.extend(_llm_generate(query, intent, baseline, llm_target, feedback))
 
         from core.generator import generate
@@ -693,6 +1015,8 @@ class MultiCompositionGenerator:
 
 
 def _llm_generate(query, intent, baseline, n, feedback=None):
+    if not _structured_llm_generation_enabled():
+        return []
     from llms.client import chat_json
     target_n = max(3, min(int(n), 8))
     parts = [f"Design query: {query}"]
@@ -751,7 +1075,7 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
             wt = item.get("comp_wt", {})
             if not wt or not isinstance(wt, dict):
                 continue
-            wt = {k: float(v) for k, v in wt.items() if float(v) > 0.001}
+            wt = _normalize_element_map(wt)
             total = sum(wt.values())
             if total < 0.5:
                 continue
@@ -760,7 +1084,7 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
             mol = validate_composition(wt_to_mol(wt))
             
             if rd:
-                violated, reason = rd.composition_violates_base(mol)
+                violated, reason = rd.composition_violates_base(wt)
                 if violated:
                     logger.debug(f"[_llm_generate] Skipping candidate - {reason}")
                     continue
@@ -810,7 +1134,7 @@ class PhysicsMLEvaluator:
             return math.exp(-0.45 * max(0, solute_count - 6))
         if any(k in q for k in ["electr", "conduct", "wire", "thermal"]):
             return math.exp(-7.0 * solute_frac)
-        elif any(k in q for k in ["turbine", "superalloy", "creep", "jet"]):
+        elif any(k in q for k in ["superalloy", "creep"]) or _is_hot_section_query(q):
             return math.exp(-0.25 * max(0, solute_count - 9))
         elif any(k in q for k in ["biomedical", "implant", "bone"]):
             return math.exp(-0.6 * max(0, solute_count - 4))
@@ -818,17 +1142,41 @@ class PhysicsMLEvaluator:
             return math.exp(-0.45 * max(0, solute_count - 6))
 
     @staticmethod
-    def _application_alignment(composition, query):
-        from physics.base import wmean
+    def _application_alignment(composition, query="", application="", family="", research_data=None):
+        from physics.base import density_rule_of_mixtures, wmean
+
+        wt = _normalize_wt(composition or {})
+        if not wt:
+            return 0.0, "no-composition"
+
+        if research_data:
+            violated, reason = research_data.composition_violates_base(wt)
+            if violated:
+                return 0.0, f"base-mismatch={reason}"
 
         q = (query or "").lower()
-        fusible_query = any(k in q for k in ["fusible", "fusible wire", "low melting", "low-melting", "solder", "thermal fuse", "fuse alloy", "fuse wire", "liquid metal"])
-        electronic_query = any(k in q for k in ["chip", "semiconductor", "interconnect", "bond wire", "wire bond", "leadframe", "microelectronics", "electronic packaging"])
+        app = (application or "").lower()
+        family = (family or "").lower()
+        fusible_query = app == "fusible_alloy" or any(k in q for k in ["fusible", "fusible wire", "low melting", "low-melting", "solder", "thermal fuse", "fuse alloy", "fuse wire", "liquid metal"])
+        electronic_query = app == "electronic_alloy" or any(k in q for k in ["chip", "semiconductor", "interconnect", "bond wire", "wire bond", "leadframe", "microelectronics", "electronic packaging"])
+
+        def _apply_lightweight_alignment(factor):
+            density_target = _density_target_for_intent(app, {}, set(), q)
+            if density_target is None:
+                return max(0.05, min(1.0, factor))
+
+            density = density_rule_of_mixtures(wt_to_mol(wt))
+            if density is not None and density > density_target:
+                factor *= max(0.08, math.exp(-0.9 * (density - density_target)))
+
+            heavy_burden = sum(wt.get(el, 0.0) * weight for el, weight in LIGHTWEIGHT_HEAVY_ELEMENT_WEIGHTS.items())
+            factor *= max(0.08, 1.0 - min(0.92, 0.9 * heavy_burden))
+            return max(0.05, min(1.0, factor))
 
         if fusible_query:
-            tm = wmean(composition, "Tm")
-            fusible_frac = sum(composition.get(el, 0.0) for el in FUSIBLE_ELEMENTS)
-            structural_frac = sum(composition.get(el, 0.0) for el in HIGH_MELT_STRUCTURAL_ELEMENTS)
+            tm = wmean(wt, "Tm")
+            fusible_frac = sum(wt.get(el, 0.0) for el in FUSIBLE_ELEMENTS)
+            structural_frac = sum(wt.get(el, 0.0) for el in HIGH_MELT_STRUCTURAL_ELEMENTS)
             tm_factor = 1.0
             if tm is not None:
                 tm_factor = max(0.12, min(1.45, 1.55 - max(0.0, tm - 420.0) / 900.0))
@@ -839,13 +1187,13 @@ class PhysicsMLEvaluator:
                 toxic_penalty = max(0.20, 1.0 - 2.5 * toxic_frac)
             multiplier = ((tm_factor + family_factor) / 2.0) * toxic_penalty
             note = f"fusible-alignment={multiplier:.2f} (Tm={tm:.0f}K)" if tm is not None else f"fusible-alignment={multiplier:.2f}"
-            return max(0.12, min(1.0, multiplier)), note
+            return _apply_lightweight_alignment(multiplier), note
 
         if electronic_query:
-            resistivity = wmean(composition, "resistivity")
-            thermal_cond = wmean(composition, "thermal_cond")
-            electronic_frac = sum(composition.get(el, 0.0) for el in ELECTRONIC_ELEMENTS)
-            structural_frac = sum(composition.get(el, 0.0) for el in HIGH_MELT_STRUCTURAL_ELEMENTS)
+            resistivity = wmean(wt, "resistivity")
+            thermal_cond = wmean(wt, "thermal_cond")
+            electronic_frac = sum(wt.get(el, 0.0) for el in ELECTRONIC_ELEMENTS)
+            structural_frac = sum(wt.get(el, 0.0) for el in HIGH_MELT_STRUCTURAL_ELEMENTS)
             rho_factor = 1.0
             if resistivity is not None:
                 rho_factor = max(0.25, min(1.35, 1.35 - 0.45 * math.log10(max(resistivity, 1e-3))))
@@ -855,13 +1203,88 @@ class PhysicsMLEvaluator:
             family_factor = max(0.20, min(1.40, 0.65 + 0.90 * electronic_frac - 0.80 * structural_frac))
             multiplier = (rho_factor + k_factor + family_factor) / 3.0
             note = f"electronics-alignment={multiplier:.2f}"
-            return max(0.18, min(1.0, multiplier)), note
+            return _apply_lightweight_alignment(multiplier), note
 
-        return 1.0, ""
+        if app == "stainless":
+            fe = wt.get("Fe", 0.0)
+            cr = wt.get("Cr", 0.0)
+            ni = wt.get("Ni", 0.0)
+            mo = wt.get("Mo", 0.0)
+            exotic = wt.get("Re", 0.0) + wt.get("Ta", 0.0) + wt.get("Hf", 0.0) + max(0.0, wt.get("W", 0.0) - 0.05)
+            # Ni contribution: austenitic stainless needs >=8% Ni, penalize if missing
+            ni_factor = min(1.0, ni / 0.08) if ni > 0 else 0.35
+            # Mo contribution: marine/pitting grades benefit from 2%+ Mo
+            mo_bonus = min(1.15, 1.0 + 1.5 * mo) if mo > 0 else 1.0
+            factor = min(1.0, fe / 0.50) * min(1.0, cr / 0.12) * ni_factor * mo_bonus * max(0.05, 1.0 - 5.0 * exotic)
+            factor = min(1.0, factor)
+            return _apply_lightweight_alignment(factor), f"stainless-alignment={factor:.2f}"
+
+        if app in {"structural", "general_structural"}:
+            fe = wt.get("Fe", 0.0)
+            c_frac = wt.get("C", 0.0)
+            cr = wt.get("Cr", 0.0)
+            exotic = (
+                wt.get("Re", 0.0) + wt.get("Ta", 0.0) + wt.get("Hf", 0.0)
+                + max(0.0, wt.get("W", 0.0) - 0.03) + max(0.0, wt.get("Co", 0.0) - 0.05)
+            )
+            carbon_factor = 1.0 if c_frac <= 0.015 else max(0.08, 1.0 - 18.0 * (c_frac - 0.015))
+            chromium_factor = 1.0 if cr <= 0.08 else max(0.20, 1.0 - 4.0 * (cr - 0.08))
+            factor = min(1.0, fe / 0.65) * carbon_factor * chromium_factor * max(0.05, 1.0 - 4.0 * exotic)
+            return _apply_lightweight_alignment(factor), f"structural-alignment={factor:.2f}"
+
+        if app == "carbon_steel":
+            fe = wt.get("Fe", 0.0)
+            c_frac = wt.get("C", 0.0)
+            exotic = wt.get("Re", 0.0) + wt.get("Ta", 0.0) + wt.get("Hf", 0.0) + wt.get("W", 0.0)
+            carbon_factor = 1.0 if 0.0005 <= c_frac <= 0.02 else 0.35
+            factor = min(1.0, fe / 0.90) * carbon_factor * max(0.05, 1.0 - 5.0 * exotic)
+            return _apply_lightweight_alignment(factor), f"carbon-steel-alignment={factor:.2f}"
+
+        if app == "superalloy":
+            ni_co = wt.get("Ni", 0.0) + wt.get("Co", 0.0)
+            cr = wt.get("Cr", 0.0)
+            low_melt = wt.get("Pb", 0.0) + wt.get("Cd", 0.0) + wt.get("Hg", 0.0) + wt.get("Bi", 0.0)
+            factor = min(1.0, ni_co / 0.45) * min(1.0, max(cr, 0.02) / 0.08) * max(0.05, 1.0 - 8.0 * low_melt)
+            return _apply_lightweight_alignment(factor), f"superalloy-alignment={factor:.2f}"
+
+        if app == "cu_alloy":
+            cu = wt.get("Cu", 0.0)
+            factor = min(1.0, cu / 0.60)
+            if family == "brass":
+                factor *= min(1.0, max(wt.get("Zn", 0.0), 0.01) / 0.20)
+            elif family in {"bronze", "phosphor_bronze"}:
+                factor *= min(1.0, max(wt.get("Sn", 0.0), 0.01) / 0.05)
+            elif family == "aluminum_bronze":
+                factor *= min(1.0, max(wt.get("Al", 0.0), 0.01) / 0.04)
+            elif family == "silicon_bronze":
+                factor *= min(1.0, max(wt.get("Si", 0.0), 0.002) / 0.01)
+            factor *= max(0.05, 1.0 - 4.0 * (wt.get("Re", 0.0) + wt.get("Ta", 0.0) + wt.get("Hf", 0.0)))
+            return _apply_lightweight_alignment(factor), f"cu-alloy-alignment={factor:.2f}"
+
+        if app == "ti_alloy":
+            ti = wt.get("Ti", 0.0)
+            off_family = wt.get("Ni", 0.0) + wt.get("Co", 0.0) + wt.get("Cu", 0.0) + wt.get("W", 0.0) + wt.get("Re", 0.0)
+            factor = min(1.0, ti / 0.70) * max(0.05, 1.0 - 3.5 * off_family)
+            return _apply_lightweight_alignment(factor), f"ti-alignment={factor:.2f}"
+
+        if app == "al_alloy":
+            al = wt.get("Al", 0.0)
+            off_family = wt.get("W", 0.0) + wt.get("Re", 0.0) + wt.get("Ta", 0.0) + wt.get("Hf", 0.0) + wt.get("Nb", 0.0)
+            factor = min(1.0, al / 0.80) * max(0.05, 1.0 - 4.0 * off_family)
+            return _apply_lightweight_alignment(factor), f"al-alignment={factor:.2f}"
+
+        if app == "nuclear":
+            zr = wt.get("Zr", 0.0)
+            off_family = wt.get("Ni", 0.0) + wt.get("Co", 0.0) + wt.get("Cu", 0.0) + wt.get("Re", 0.0)
+            factor = min(1.0, zr / 0.78) * max(0.05, 1.0 - 4.5 * off_family)
+            return _apply_lightweight_alignment(factor), f"nuclear-alignment={factor:.2f}"
+
+        return _apply_lightweight_alignment(1.0), ""
 
     @staticmethod
     def evaluate(candidates, query="", T_K=298.0, weather=None, domains_focus=None,
-                 constraints=None, dpa_rate=1e-7, pressure_MPa=0.0, research_data=None):
+                 constraints=None, dpa_rate=1e-7, pressure_MPa=0.0, research_data=None,
+                 intent=None):
         from physics.filter import run_all
         import math
         for cand in candidates:
@@ -874,6 +1297,7 @@ class PhysicsMLEvaluator:
                 cand.physics_evaluated = True
 
                 base_score = result.get("composite_score", 0)
+                weight_comp = cand.composition_wt or mol_to_wt(cand.composition)
                 weak = []
                 domain_scores = {}
                 for dr in result.get("domain_results", []):
@@ -885,7 +1309,7 @@ class PhysicsMLEvaluator:
                 cand.score = base_score
                 
                 if research_data:
-                    violated, reason = research_data.composition_violates_base(cand.composition)
+                    violated, reason = research_data.composition_violates_base(weight_comp)
                     if violated:
                         cand.score = 0
                         cand.weak_domains.append({"name": "Base Material Rejection", "score": 0, "fails": [reason]})
@@ -906,10 +1330,19 @@ class PhysicsMLEvaluator:
                             weighted_sum += w * d_score
                             weight_used += w
                         weighted_score = (weighted_sum / weight_used) if weight_used > 0 else base_score
+                        primary_count = len(getattr(research_data, "primary_domains", []) or [])
+                        primary_emphasis = min(0.75, 0.25 + 0.10 * primary_count)
+                        blended_score = (primary_emphasis * weighted_score) + ((1.0 - primary_emphasis) * base_score)
                         
-                        penalty = PhysicsMLEvaluator._overalloying_penalty(cand.composition, query)
-                        alignment_multiplier, alignment_note = PhysicsMLEvaluator._application_alignment(cand.composition, query)
-                        cand.score = round(max(0.0, min(100.0, weighted_score * penalty * alignment_multiplier)), 2)
+                        penalty = PhysicsMLEvaluator._overalloying_penalty(weight_comp, query)
+                        alignment_multiplier, alignment_note = PhysicsMLEvaluator._application_alignment(
+                            weight_comp,
+                            query=query,
+                            application=(intent or {}).get("application", ""),
+                            family=((intent or {}).get("constraints") or {}).get("alloy_family", ""),
+                            research_data=research_data,
+                        )
+                        cand.score = round(max(0.0, min(100.0, blended_score * penalty * alignment_multiplier)), 2)
                         
                         if penalty < 0.8:
                             cand.weak_domains.append({"name": "Over-alloying Penalty", "score": int(penalty*100), "fails": ["Excessive solute additions for application"]})
@@ -1077,9 +1510,12 @@ def _compute_ml_confidence(predictions: dict) -> float:
 
 
 def _cheap_candidate_score(cand, intent: dict, query: str) -> float:
-    comp = cand.composition or {}
+    comp = cand.composition_wt or cand.composition or {}
     must_include = intent.get("must_include") or []
     exclude = set(intent.get("exclude_elements") or [])
+    research_data = intent.get("research_data")
+    constraints = dict(intent.get("constraints", {}) or {})
+    props = set(intent.get("target_properties") or [])
 
     must_score = 1.0
     if must_include:
@@ -1091,9 +1527,33 @@ def _cheap_candidate_score(cand, intent: dict, query: str) -> float:
         bad_frac = sum(comp.get(symbol, 0.0) for symbol in exclude)
         exclude_penalty = max(0.05, 1.0 - 8.0 * bad_frac)
 
+    if research_data:
+        violated, _ = research_data.composition_violates_base(_normalize_wt(comp))
+        if violated:
+            return 0.0
+
     penalty = PhysicsMLEvaluator._overalloying_penalty(comp, query)
-    alignment_multiplier, _ = PhysicsMLEvaluator._application_alignment(comp, query)
-    return 100.0 * must_score * exclude_penalty * penalty * alignment_multiplier
+    alignment_multiplier, _ = PhysicsMLEvaluator._application_alignment(
+        comp,
+        query=query,
+        application=intent.get("application", ""),
+        family=(intent.get("constraints") or {}).get("alloy_family", ""),
+        research_data=research_data,
+    )
+    density_multiplier = 1.0
+    density_target = _density_target_for_intent(intent.get("application", ""), constraints, props, (query or "").lower())
+    if density_target is not None:
+        from physics.base import density_rule_of_mixtures
+
+        mol_comp = cand.composition or wt_to_mol(_normalize_wt(comp))
+        density = density_rule_of_mixtures(mol_comp)
+        if density is not None and density > density_target:
+            density_multiplier *= max(0.05, math.exp(-0.9 * (density - density_target)))
+
+        heavy_burden = sum(_normalize_wt(comp).get(el, 0.0) * weight for el, weight in LIGHTWEIGHT_HEAVY_ELEMENT_WEIGHTS.items())
+        density_multiplier *= max(0.05, 1.0 - min(0.92, 0.9 * heavy_burden))
+
+    return 100.0 * must_score * exclude_penalty * penalty * alignment_multiplier * density_multiplier
 
 
 def _downselect_candidates(candidates: list, limit: int, query: str, intent: dict) -> list:
@@ -1338,18 +1798,30 @@ class Pipeline:
             self.generation_stats["raw_generated"] += len(candidates)
             pre_dedupe = len(candidates)
             candidates = _dedupe_candidates(candidates, similarity_threshold=0.04)
-            iter_stats["post_dedupe"] = len(candidates)
-            self.generation_stats["post_dedupe"] += len(candidates)
+            post_dedupe_count = len(candidates)
+            iter_stats["post_dedupe"] = post_dedupe_count
+            self.generation_stats["post_dedupe"] += post_dedupe_count
             for cand in candidates:
                 cand.iteration = iteration
                 cand.screening_score = round(_cheap_candidate_score(cand, intent, query), 2)
                 if not cand.physics_evaluated:
                     cand.score = cand.screening_score
                     cand.score_source = "screen"
+            candidates, rejected_count = _filter_candidates_against_research(candidates, research_data)
+            if rejected_count:
+                iter_stats["rejected_by_research"] = rejected_count
+                self._log(
+                    step_counter,
+                    "screen",
+                    f"Rejected {rejected_count} off-request candidates",
+                    "Removed candidates that violated the inferred base family or forbidden-element rules",
+                    agent="Pipeline",
+                )
+                step_counter += 1
             self.all_candidates.extend(candidates)
-            if len(candidates) != pre_dedupe:
+            if post_dedupe_count != pre_dedupe:
                 self._log(step_counter, "dedupe",
-                          f"Removed repeats: {pre_dedupe} -> {len(candidates)}",
+                          f"Removed repeats: {pre_dedupe} -> {post_dedupe_count}",
                           "Dropped duplicate/near-duplicate compositions",
                           agent="MultiCompGenerator")
                 step_counter += 1
@@ -1383,7 +1855,7 @@ class Pipeline:
             shortlisted = PhysicsMLEvaluator.evaluate(
                 shortlisted, query=query, T_K=T_K, weather=weather, domains_focus=domains_focus,
                 constraints=self.constraints, dpa_rate=dpa_rate, pressure_MPa=pressure_MPa,
-                research_data=research_data)
+                research_data=research_data, intent=intent)
 
             if self.use_ml:
                 n_combined = 0
@@ -1493,11 +1965,26 @@ def _dedupe_candidates(candidates, similarity_threshold=0.02):
     return unique
 
 
+def _candidate_physics_score(candidate):
+    physics = getattr(candidate, "physics_result", None) or {}
+    score = physics.get("composite_score")
+    return float(score) if score is not None else None
+
+
+def _candidate_rank_score(candidate):
+    return float(getattr(candidate, "score", 0.0) or 0.0)
+
+
 def _candidate_sort_key(candidate):
+    physics_score = _candidate_physics_score(candidate)
+    screening_score = float(getattr(candidate, "screening_score", 0.0) or 0.0)
+    rank_score = _candidate_rank_score(candidate)
+    physics_first = 1 if getattr(candidate, "physics_evaluated", False) else 0
     return (
-        float(getattr(candidate, "score", 0.0) or 0.0),
-        float(getattr(candidate, "screening_score", 0.0) or 0.0),
-        1 if getattr(candidate, "physics_evaluated", False) else 0,
+        physics_first,
+        rank_score if physics_first else screening_score,
+        physics_score if physics_score is not None else -1.0,
+        screening_score,
     )
 
 

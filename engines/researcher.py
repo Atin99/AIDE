@@ -1,12 +1,30 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 
 from llms.client import chat_json, is_available as llm_available
 
 logger = logging.getLogger("aide.researcher")
+
+HOT_SECTION_MARKERS = [
+    "hot section", "gas path", "gas turbine", "turbine", "turbine blade", "blade",
+    "jet engine", "combustor", "afterburner", "exhaust nozzle", "stress rupture",
+]
+
+AEROSPACE_STRUCTURE_MARKERS = [
+    "airframe", "fuselage", "wing", "wing spar", "skin", "panel", "bulkhead",
+    "frame", "aircraft body", "jet body", "body shell", "aerospace structural",
+    "aircraft frame", "aircraft structure",
+]
+
+HEAVY_STRUCTURE_MARKERS = [
+    "crane", "boom", "gantry", "hoist", "frame", "chassis", "body", "bridge",
+    "girder", "beam", "bucket", "loader", "excavator", "trailer", "truck body",
+    "load bearing", "load-bearing",
+]
 
 RESEARCH_SCHEMA = """{
   "base_elements": ["<symbol>"],
@@ -87,7 +105,7 @@ class ApplicationResearcher:
         logger.info("[RESEARCH] Researching application: '%s'", query)
 
         llm_error = ""
-        if llm_available():
+        if self._structured_llm_enabled() and llm_available():
             try:
                 raw = self._ask_llm(query, intent=intent)
                 if isinstance(raw, dict):
@@ -106,7 +124,7 @@ class ApplicationResearcher:
                 llm_error = str(err)
                 logger.warning("[RESEARCH] LLM research failed: %s", err)
         else:
-            llm_error = "llm_unavailable"
+            llm_error = "disabled_by_config" if not self._structured_llm_enabled() else "llm_unavailable"
 
         fallback = self._heuristic_research(query, intent=intent)
         fallback.source = "heuristic"
@@ -258,13 +276,16 @@ class ApplicationResearcher:
                 mandatory_mechanisms.append("carbide")
             else:
                 mandatory_mechanisms.append("solid_solution")
-        if "high_strength" in properties and app in {"al_alloy", "ti_alloy", "superalloy"}:
+        if "high_strength" in properties and app == "al_alloy":
             mandatory_mechanisms.append("precipitation_hard")
         if app == "fusible_alloy":
             mandatory_mechanisms.append("solid_solution")
 
         if app == "ti_alloy" and ("high_strength" in properties or "fatigue_resistance" in properties):
             mandatory_mechanisms.append("alpha_beta")
+            mandatory_mechanisms.append("solid_solution")
+        if app == "superalloy" and "high_strength" in properties:
+            mandatory_mechanisms.append("gamma_prime")
 
         mandatory_mechanisms = self._unique(mandatory_mechanisms)
 
@@ -283,6 +304,10 @@ class ApplicationResearcher:
             primary_domains.extend(["Thermodynamics", "Thermal Properties"])
         if app == "electronic_alloy":
             primary_domains.extend(["Electronic Structure", "Thermal Properties"])
+        if "low_density" in properties:
+            primary_domains.append("Structural Efficiency")
+        if app in {"structural", "general_structural", "carbon_steel"} or self._is_heavy_structure_query(q):
+            primary_domains.extend(["Fatigue & Fracture", "Weldability", "Fracture Mechanics", "Impact Toughness"])
         if "biocompatibility" in properties or app == "biomedical":
             primary_domains.append("Biocompatibility")
         if app == "nuclear" or "radiation_resistance" in properties:
@@ -316,12 +341,14 @@ class ApplicationResearcher:
             return "stainless"
         if any(k in q for k in ["any alloy", "any composition", "unrestricted composition", "any elements", "no element restriction"]):
             return "open_alloy"
-        if any(k in q for k in ["superalloy", "inconel", "turbine", "jet", "creep"]):
-            return "superalloy"
         if any(k in q for k in ["titanium", "ti-6", "ti alloy"]):
             return "ti_alloy"
         if any(k in q for k in ["aluminum", "aluminium", "duralumin"]):
             return "al_alloy"
+        if self._is_aerospace_structure_query(q) and "lightweight" in q and not self._is_hot_section_query(q):
+            return "ti_alloy"
+        if any(k in q for k in ["superalloy", "inconel", "creep"]) or self._is_hot_section_query(q):
+            return "superalloy"
         if any(k in q for k in ["nuclear", "reactor", "zircaloy", "cladding"]):
             return "nuclear"
         if any(k in q for k in ["implant", "biomedical", "surgical", "dental"]):
@@ -342,11 +369,13 @@ class ApplicationResearcher:
         mapping = {
             "low_melting_point": ["low melting", "low-melting", "fusible", "solder", "reflow", "liquid metal", "thermal fuse"],
             "corrosion_resistance": ["corrosion", "rust", "pitting", "chloride", "marine"],
-            "high_temperature_strength": ["high temperature", "elevated temperature", "hot", "turbine"],
+            "high_temperature_strength": ["high temperature", "elevated temperature", "hot section", "turbine", "gas turbine", "jet engine", "blade", "combustor"],
             "creep_resistance": ["creep", "stress rupture"],
             "wear_resistance": ["wear", "abrasion", "erosion", "tribology"],
             "hardness": ["hardness", "hard"],
             "fatigue_resistance": ["fatigue", "cyclic"],
+            "high_strength": ["strength", "strong", "yield", "ultimate tensile", "uts"],
+            "low_density": ["lightweight", "low density", "mass critical", "weight critical"],
             "conductivity": ["conductivity", "electrical", "wire", "chip", "interconnect", "bond wire", "leadframe", "packaging"],
             "biocompatibility": ["biomedical", "implant", "biocompatible"],
             "radiation_resistance": ["radiation", "reactor", "nuclear", "dpa"],
@@ -355,6 +384,9 @@ class ApplicationResearcher:
         for name, keys in mapping.items():
             if any(k in q for k in keys):
                 props.append(name)
+
+        if self._is_heavy_structure_query(q):
+            props.extend(["fatigue_resistance", "weldability"])
 
         fuse_wire_markers = ["fuse wire", "fusible wire", "fuse alloy", "fusible alloy", "thermal fuse"]
         explicit_electrical_markers = [
@@ -371,6 +403,24 @@ class ApplicationResearcher:
             props.extend(["high_temperature_strength", "creep_resistance"])
 
         return self._unique(props)
+
+    def _is_hot_section_query(self, q: str) -> bool:
+        return any(marker in q for marker in HOT_SECTION_MARKERS) or (
+            "jet" in q and any(marker in q for marker in ["engine", "turbine", "blade", "combustor", "nozzle"])
+        )
+
+    def _is_aerospace_structure_query(self, q: str) -> bool:
+        return any(marker in q for marker in AEROSPACE_STRUCTURE_MARKERS) or (
+            any(marker in q for marker in ["aircraft", "aerospace", "airplane", "plane", "jet"])
+            and any(marker in q for marker in ["body", "frame", "fuselage", "wing", "skin", "panel", "spar", "structure", "structural"])
+        )
+
+    def _is_heavy_structure_query(self, q: str) -> bool:
+        return any(marker in q for marker in HEAVY_STRUCTURE_MARKERS)
+
+    def _structured_llm_enabled(self) -> bool:
+        value = os.environ.get("AIDE_USE_LLM_RESEARCH", "1").strip().lower()
+        return value in {"1", "true", "yes", "on"}
 
     def _choose_base(self, candidates: list[str], excludes: set[str]) -> str:
         for element in candidates:

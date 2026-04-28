@@ -73,13 +73,18 @@ APPLICATION_DEFAULT_PROPERTIES = {
     "open_alloy": ["high_strength"],
     "general_structural": ["high_strength"],
 }
+KNOWN_APPLICATIONS = set(APPLICATION_DEFAULT_PROPERTIES.keys()) | {"structural"}
 
 PROPERTY_KEYWORDS = {
     "low_melting_point": ["low melting", "low-melting", "fusible", "solder", "reflow", "liquid metal", "thermal fuse", "melt below"],
     "corrosion_resistance": ["corrosion", "rust", "pitting", "chloride", "seawater", "marine"],
     "oxidation_resistance": ["oxidation", "scale", "hot corrosion"],
     "creep_resistance": ["creep", "stress rupture"],
-    "high_temperature_strength": ["high temperature", "elevated temperature", "hot section", "turbine", "jet"],
+    "high_temperature_strength": [
+        "high temperature", "elevated temperature", "hot section", "turbine", "gas turbine",
+        "jet engine", "blade", "combustor", "exhaust nozzle", "rocket chamber",
+        "combustion chamber", "chamber liner", "rocket nozzle", "throat liner",
+    ],
     "fatigue_resistance": ["fatigue", "cyclic", "high cycle", "low cycle"],
     "high_strength": ["strength", "strong", "yield", "ultimate tensile", "uts"],
     "hardness": ["hardness", "hard", "harden"],
@@ -91,6 +96,19 @@ PROPERTY_KEYWORDS = {
     "radiation_resistance": ["radiation", "reactor", "nuclear", "dpa"],
     "thermal_stability": ["phase stability", "thermal stability", "stability"],
 }
+
+HOT_SECTION_MARKERS = [
+    "hot section", "gas path", "gas turbine", "turbine", "turbine blade", "blade",
+    "jet engine", "engine section", "combustor", "afterburner", "exhaust nozzle",
+    "nozzle guide vane", "stress rupture", "rocket chamber", "combustion chamber",
+    "chamber liner", "rocket nozzle", "throat liner",
+]
+
+AEROSPACE_STRUCTURE_MARKERS = [
+    "airframe", "fuselage", "wing", "wing spar", "skin", "panel", "bulkhead",
+    "frame", "aircraft body", "jet body", "body shell", "aerospace structural",
+    "aircraft frame", "aircraft structure",
+]
 
 ELEMENT_ALIAS = {
     "Ni": ["ni", "nickel"],
@@ -121,6 +139,89 @@ ELEMENT_ALIAS = {
 ELEMENT_SET = set(available_elements())
 
 
+def _contains_any(text, markers):
+    return any(marker in text for marker in markers)
+
+
+def _contains_word(text, token):
+    return bool(re.search(r"\b" + re.escape(token) + r"\b", text))
+
+
+def _structured_llm_enabled() -> bool:
+    value = os.environ.get("AIDE_USE_LLM_INTENT", "1").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _is_hot_section_query(q):
+    return _contains_any(q, HOT_SECTION_MARKERS) or (
+        "jet" in q and any(marker in q for marker in ["engine", "turbine", "blade", "combustor", "nozzle"])
+    )
+
+
+def _is_aerospace_structure_query(q):
+    return _contains_any(q, AEROSPACE_STRUCTURE_MARKERS) or (
+        any(marker in q for marker in ["aircraft", "aerospace", "airplane", "plane", "jet"])
+        and any(marker in q for marker in ["body", "frame", "fuselage", "wing", "skin", "panel", "spar", "structure", "structural"])
+    )
+
+
+def _query_mentions_element(q, symbol):
+    for alias in ELEMENT_ALIAS.get(symbol, [symbol.lower()]):
+        if re.search(r"\b" + re.escape(alias.lower()) + r"\b", q):
+            return True
+    return False
+
+
+def _canonical_property_name(value):
+    key = str(value or "").strip().lower()
+    if not key:
+        return None
+    if key in PROPERTY_KEYWORDS:
+        return key
+    for prop, markers in PROPERTY_KEYWORDS.items():
+        if any(marker in key for marker in markers):
+            return prop
+    return None
+
+
+def _canonicalize_properties(values):
+    props = []
+    for value in values or []:
+        canonical = _canonical_property_name(value)
+        if canonical and canonical not in props:
+            props.append(canonical)
+    return props
+
+
+def _coerce_constraint_value(key, value):
+    if isinstance(value, (int, float, bool)):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if key in {"max_density", "min_PREN", "min_yield_MPa", "max_melting_point_K"}:
+        match = re.search(r"-?\d+(?:\.\d+)?", text)
+        if match:
+            return float(match.group(0))
+    if key in {"non_magnetic", "no_ni", "no_co", "no_pb", "no_cd", "rohs_compliant"}:
+        lowered = text.lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return value
+
+
+def _sanitize_constraints(constraints):
+    cleaned = {}
+    for key, value in dict(constraints or {}).items():
+        coerced = _coerce_constraint_value(key, value)
+        if coerced in (None, ""):
+            continue
+        cleaned[str(key)] = coerced
+    return cleaned
+
+
 def classify_intent(query, memory=None):
     query = (query or "").strip()
     if not query:
@@ -140,7 +241,7 @@ def classify_intent(query, memory=None):
     source = "rule_based"
     debug.append({"stage": "rule_parse", "status": "ok"})
 
-    if llm_available():
+    if _structured_llm_enabled() and llm_available():
         try:
             remote = _ask_llm(query, memory)
             if isinstance(remote, dict):
@@ -155,7 +256,10 @@ def classify_intent(query, memory=None):
             logger.warning("Remote intent parse failed: %s", err)
             debug.append({"stage": "remote_llm", "status": "failed", "reason": str(err)})
     else:
-        debug.append({"stage": "remote_llm", "status": "disabled", "reason": "no_remote_api_key"})
+        reason = "disabled_by_config"
+        if _structured_llm_enabled() and not llm_available():
+            reason = "no_remote_api_key"
+        debug.append({"stage": "remote_llm", "status": "disabled", "reason": reason})
 
     clean = _validate_and_enrich(query, best)
     clean = _enforce_structured_core(clean, query)
@@ -339,18 +443,19 @@ def _extract_application(q, props=None):
         return "stainless"
     if any(k in q for k in ["marine", "offshore", "seawater"]) and "steel" in q:
         return "stainless"
-
-    if any(k in q for k in ["inconel", "superalloy", "turbine", "jet", "gas path", "hot section"]):
-        return "superalloy"
     if any(k in q for k in ["titanium", "ti-6", "ti alloy", "ti64"]):
         return "ti_alloy"
     if any(k in q for k in ["aluminum", "aluminium", "duralumin", "7xxx", "6xxx", "2xxx"]):
         return "al_alloy"
+    if _is_aerospace_structure_query(q) and "low_density" in props and not _is_hot_section_query(q):
+        return "ti_alloy"
+    if any(k in q for k in ["inconel", "superalloy"]) or _is_hot_section_query(q):
+        return "superalloy"
     if any(k in q for k in ["nuclear", "reactor", "zircaloy", "cladding"]):
         return "nuclear"
     if any(k in q for k in ["implant", "biomedical", "surgical", "dental", "hip", "knee"]):
         return "biomedical"
-    if any(k in q for k in ["high entropy", "hea", "cantor", "multiprincipal"]):
+    if any(k in q for k in ["high entropy", "cantor", "multiprincipal"]) or _contains_word(q, "hea"):
         return "hea"
     if any(k in q for k in ["refractory", "ultra high temperature", "above 1200", "1200c", "1500c"]):
         return "refractory"
@@ -375,6 +480,30 @@ def _extract_application(q, props=None):
         return "superalloy"
 
     return None
+
+
+def _application_supported_by_query(application, q, props=None):
+    app = str(application or "").strip().lower()
+    props = set(props or [])
+    if not app:
+        return False
+    if app == "hea":
+        return any(k in q for k in ["high entropy", "equiatomic", "multi principal", "multi-principal"]) or _contains_word(q, "hea")
+    if app == "superalloy":
+        return _is_hot_section_query(q) or bool({"high_temperature_strength", "creep_resistance", "oxidation_resistance"} & props)
+    if app == "ti_alloy":
+        return any(k in q for k in ["titanium", "ti alloy", "ti-6", "ti64"]) or (_is_aerospace_structure_query(q) and "low_density" in props)
+    if app == "al_alloy":
+        return any(k in q for k in ["aluminum", "aluminium", "heat spreader", "heat sink", "thermal plate"]) or "low_density" in props
+    if app == "electronic_alloy":
+        return "conductivity" in props or any(k in q for k in ["chip", "package", "interconnect", "heat spreader", "heat sink", "busbar", "connector"])
+    if app == "stainless":
+        return any(k in q for k in ["stainless", "chloride", "marine", "seawater", "coastal", "offshore"])
+    if app in {"general_structural", "structural", "carbon_steel"}:
+        return bool({"high_strength", "weldability", "fatigue_resistance"} & props) or any(
+            k in q for k in ["beam", "frame", "body", "bridge", "bolt", "chassis", "crane"]
+        )
+    return True
 
 
 def _extract_constraints(q, parsed):
@@ -651,8 +780,14 @@ def _validate_and_enrich(query, llm_result):
     for key in ("target_properties", "domains_focus", "must_include", "exclude_elements"):
         if not isinstance(clean.get(key), list):
             clean[key] = []
+    clean["target_properties"] = _canonicalize_properties(clean.get("target_properties"))
     if not isinstance(clean.get("constraints"), dict):
         clean["constraints"] = {}
+    clean["constraints"] = _sanitize_constraints(clean.get("constraints"))
+    if clean.get("application"):
+        clean["application"] = str(clean["application"]).strip().lower()
+        if clean["application"] not in KNOWN_APPLICATIONS:
+            clean["application"] = None
     _resolve_alloy(clean, "alloy_name", "composition")
     _resolve_alloy(clean, "alloy_name_2", "composition_2")
     if clean["mode"] != "compare":
@@ -672,6 +807,7 @@ def _enforce_structured_core(result, query):
 
     if not isinstance(result.get("constraints"), dict):
         result["constraints"] = {}
+    result["constraints"] = _sanitize_constraints(result.get("constraints"))
     if not isinstance(result.get("target_properties"), list):
         result["target_properties"] = []
     if not isinstance(result.get("must_include"), list):
@@ -688,10 +824,21 @@ def _enforce_structured_core(result, query):
         if not result.get("only_elements"):
             result["only_elements"] = sorted(explicit_comp.keys())
 
-    result["target_properties"] = _unique(result["target_properties"] + _extract_target_properties(q))
+    result["target_properties"] = _unique(
+        _canonicalize_properties(result["target_properties"] + _extract_target_properties(q))
+    )
+
+    if result.get("application"):
+        result["application"] = str(result["application"]).strip().lower()
+        if result["application"] not in KNOWN_APPLICATIONS:
+            result["application"] = None
+
+    inferred_application = _extract_application(q, result["target_properties"])
+    if result.get("application") and not _application_supported_by_query(result["application"], q, result["target_properties"]):
+        result["application"] = inferred_application or result["application"]
 
     if not result.get("application"):
-        result["application"] = _extract_application(q, result["target_properties"])
+        result["application"] = inferred_application
     if not result.get("application") and result.get("composition"):
         result["application"] = _application_from_composition(result["composition"])
     if not result.get("application"):
@@ -767,6 +914,25 @@ def _application_from_composition(composition):
 
 
 def _apply_property_guidance(result, q):
+    if _is_aerospace_structure_query(q) and not _is_hot_section_query(q):
+        result["target_properties"] = [
+            prop for prop in result.get("target_properties", [])
+            if prop not in {"high_temperature_strength", "creep_resistance"}
+        ]
+        for stale in ["Ni", "Co"]:
+            if stale in result["must_include"] and not _query_mentions_element(q, stale):
+                result["must_include"].remove(stale)
+
+    heavy_structure_markers = [
+        "crane", "boom", "gantry", "hoist", "frame", "chassis", "body", "bridge",
+        "girder", "beam", "bucket", "loader", "excavator", "trailer", "truck body",
+        "load bearing", "load-bearing",
+    ]
+    if _contains_any(q, heavy_structure_markers):
+        for prop in ["high_strength", "fatigue_resistance", "weldability"]:
+            if prop not in result["target_properties"]:
+                result["target_properties"].append(prop)
+
     props = set(result.get("target_properties") or [])
     app = result.get("application")
     constraints = result.get("constraints", {})
@@ -826,11 +992,34 @@ def _apply_property_guidance(result, q):
             if "conductivity" not in result["target_properties"]:
                 result["target_properties"].append("conductivity")
 
-    if "low_density" in props and result.get("application") == "general_structural":
-        if "Ti" not in result["exclude_elements"]:
-            result["application"] = "ti_alloy"
-        else:
-            result["application"] = "al_alloy"
+    if "low_density" in props:
+        if _is_aerospace_structure_query(q) and not _is_hot_section_query(q):
+            if "Ti" not in result["exclude_elements"]:
+                result["application"] = "ti_alloy"
+                add_must("Ti")
+            elif app in {None, "general_structural", "structural", "open_alloy", "superalloy"}:
+                result["application"] = "al_alloy"
+                add_must("Al")
+        elif result.get("application") in {"general_structural", "structural", "open_alloy"}:
+            if "Ti" not in result["exclude_elements"]:
+                result["application"] = "ti_alloy"
+                add_must("Ti")
+            else:
+                result["application"] = "al_alloy"
+                add_must("Al")
+
+        if not constraints.get("max_density"):
+            density_defaults = {
+                "al_alloy": 3.3,
+                "ti_alloy": 5.2,
+                "superalloy": 7.8,
+                "structural": 5.6,
+                "general_structural": 5.6,
+                "open_alloy": 5.6,
+                "stainless": 7.4,
+                "carbon_steel": 5.8,
+            }
+            constraints["max_density"] = density_defaults.get(result.get("application"), 5.8)
 
     if constraints.get("cost_level") == "low":
         for expensive in ["Re", "Ta", "Hf"]:

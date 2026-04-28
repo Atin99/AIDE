@@ -1,4 +1,4 @@
-﻿# AIDE v5 Full Project Report
+# AIDE v5 Full Project Report
 
 ## 1. Executive Summary
 
@@ -694,7 +694,7 @@ Result:
 
 ### 10.3 Practical Runtime Observation
 
-While testing, the local model stack reported memory pressure warnings from Ollama, but the tests still passed. That is a positive sign:
+While testing, all LLM reasoning was handled via remote API providers (OpenRouter, Gemini, Groq). When no API key is configured, the tests still passed because:
 
 - the core system can still function even when the local LLM path is constrained,
 - because the deterministic and heuristic layers remain usable.
