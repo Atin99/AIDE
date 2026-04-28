@@ -1132,7 +1132,7 @@ class PhysicsMLEvaluator:
             return math.exp(-0.35 * max(0, solute_count - 5))
         if any(k in q for k in ["chip", "semiconductor", "interconnect", "bond wire", "leadframe"]):
             return math.exp(-0.45 * max(0, solute_count - 6))
-        if any(k in q for k in ["electr", "conduct", "wire", "thermal"]):
+        if any(k in q for k in ["electr", "conduct", "wire", "thermal"]) and not any(k in q for k in ["superalloy", "turbine", "jet", "blade", "creep", "900"]):
             return math.exp(-7.0 * solute_frac)
         elif any(k in q for k in ["superalloy", "creep"]) or _is_hot_section_query(q):
             return math.exp(-0.25 * max(0, solute_count - 9))
@@ -1152,7 +1152,9 @@ class PhysicsMLEvaluator:
         if research_data:
             violated, reason = research_data.composition_violates_base(wt)
             if violated:
-                return 0.0, f"base-mismatch={reason}"
+                # Proportional penalty instead of hard zero
+                base_pen = research_data.base_element_penalty(wt)
+                return max(0.1, base_pen), f"base-shortfall={reason}"
 
         q = (query or "").lower()
         app = (application or "").lower()
