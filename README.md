@@ -10,30 +10,31 @@ pinned: false
 
 # AIDE v5
 
-AIDE (Alloy Intelligence and Design Engine) provides alloy analysis and design with multi-domain physics scoring, contextual weighting, and conversational workflows.
+AIDE (Alloy Intelligence and Design Engine) is a physics-constrained alloy design platform. It generates, evaluates, and ranks candidate alloy compositions across 42 engineering domains using deterministic physics models, with optional remote LLM reasoning for intent parsing and research.
 
 ## What It Does
 
-- Evaluates alloys across 42 physics and engineering domains.
-- Computes weighted and raw composite scores with pass/warn/fail checks.
-- Supports application-aware weighting profiles.
-- Supports intent-driven and composition-driven workflows.
-- Uses remote LLM reasoning with deterministic physics/ML fallback.
+- **42-Domain Physics Evaluation** — thermodynamic, mechanical, corrosion, fatigue, creep, weldability, and 36 more domain checks on every candidate.
+- **Iterative Design Pipeline** — generates candidate compositions, evaluates with full physics, ranks by weighted composite score, and iterates with feedback.
+- **Proportional Scoring** — candidates receive proportional penalties for base element shortfalls and application misalignment instead of hard rejections.
+- **Application-Aware Constraints** — the researcher infers metallurgical constraints (base elements, mechanisms, forbidden elements) from the query and applies them to generation and scoring.
+- **Remote LLM Gateway** — optional LLM reasoning for intent parsing, application research, and composition proposals via free-tier API providers.
+- **Multiple Interfaces** — FastAPI backend + HTML/JS frontend, Streamlit UI, or direct API.
 
 ## Project Structure
 
-- `app.py` — Streamlit UI (Chat & Design, Composition Editor, Multi-Compare)
-- `backend/app` — FastAPI backend wrapper
-- `frontend/` — HTML/CSS/JS client
-- `physics/` — 42-domain physics evaluator
-- `core/` — elements, alloy database, data hub, query parser
-- `engines/` — design pipeline, researcher, engine modes
-- `llms/` — remote LLM gateway, intent parser, explainer, conversation memory
-- `ml/` — ML property predictor
+- `backend/app/` — FastAPI backend (API routes, services, main entry point)
+- `frontend/` — HTML/CSS/JS client (single-page app with engine run, composition editor, multi-compare)
+- `physics/` — 42-domain physics evaluator (`filter.py`, domain modules)
+- `engines/` — design pipeline (`pipeline.py`), application researcher (`researcher.py`), engine modes
+- `core/` — elements database, alloy catalog, data hub, query parser
+- `llms/` — remote LLM gateway (`client.py`), intent parser, explainer, conversation memory
+- `ml/` — ML property predictor (XGBoost/scikit-learn)
 - `rag/` — literature retrieval enrichment
-- `tests/` — unit tests
+- `app.py` — Streamlit UI (Chat & Design, Composition Editor, Multi-Compare)
+- `tests/` — unit tests (32 tests covering pipeline, scoring, intent, and query behaviors)
 
-## Quick Start (API + Web)
+## Quick Start (API + Frontend)
 
 1. Install dependencies and start API:
 
@@ -42,19 +43,12 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy .env.example .env   # then fill in your API keys
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 300
+uvicorn backend.app.main:app --host 0.0.0.0 --port 9000 --timeout-keep-alive 300
 ```
 
-2. Run frontend:
+2. Open `http://localhost:9000/app/` — the frontend is served directly by the backend.
 
-```powershell
-cd frontend
-python -m http.server 5173
-```
-
-3. Open `http://localhost:5173` and keep API base as `http://localhost:8000`.
-
-Long-running design requests target a 5-minute browser/API window. `--timeout-keep-alive 300` helps prevent idle connections from dropping.
+Long-running design requests may take 10-30 seconds depending on iteration count.
 
 ## Streamlit Mode
 
@@ -66,12 +60,13 @@ streamlit run app.py
 
 Primary endpoint:
 
-- `POST /api/v1/run` (single orchestrator endpoint)
+- `POST /api/v1/run` — unified orchestrator (design engine, composition analysis, alloy lookup)
 
 Utility endpoints:
 
 - `GET /health`
 - `GET /api/v1/domains`
+- `GET /api/v1/alloys`
 
 Legacy compatibility endpoints:
 
@@ -80,6 +75,18 @@ Legacy compatibility endpoints:
 - `POST /api/v1/composition/analyze`
 
 OpenAPI contract: `openapi.yaml`
+
+## Scoring & Ranking
+
+Each candidate receives a composite score (0-100) computed as:
+
+1. **Physics composite** — weighted average across 42 domains (each domain runs multiple checks with pass/warn/fail thresholds).
+2. **Application alignment** — multiplier (0.1-1.0) based on how well the composition matches the target application family.
+3. **Overalloying penalty** — reduces scores for compositions with excessive solute additions.
+4. **Base element penalty** — proportional penalty when base element fraction falls below the target (not a hard rejection).
+5. **Constraint enforcement** — density, cost, and element inclusion/exclusion constraints.
+
+Only physics-evaluated candidates appear in results. Screen-only candidates (heuristic scores) are internal pipeline artifacts and are not shown to users.
 
 ## Remote LLM Gateway
 
@@ -113,20 +120,28 @@ When no API key is configured, the app falls back to rule-based intent parsing a
 - `AIDE_USE_LLM_RESEARCH` — `1` to use LLM for application research (default: `1`)
 - `AIDE_USE_LLM_GENERATION` — `1` to use LLM for composition proposals (default: `1`)
 - `AIDE_OPENROUTER_MODEL` — override OpenRouter model
-- `AIDE_OPENROUTER_ROUTER_MODEL` — override OpenRouter free router model
 - `AIDE_GEMINI_MODEL` — override Gemini model
 - `AIDE_GROQ_MODEL` — override Groq model
 - `AIDE_XAI_MODEL` — override xAI model
 - `AIDE_LLM_PROVIDER_ORDER` — comma-separated provider fallback order for chat
 - `AIDE_LLM_JSON_PROVIDER_ORDER` — comma-separated provider fallback order for JSON tasks
-- `AIDE_OPENROUTER_TITLE` — app title sent to OpenRouter
-- `AIDE_OPENROUTER_REFERER` — referer header for OpenRouter
 - `AIDE_LLM_HTTP_TIMEOUT_SECONDS` — HTTP timeout (default: `45`)
 
 ### API Server
 
 - `AIDE_API_CORS_ORIGINS` — CORS allowed origins (default: `*`)
-- `AIDE_PROXY_TIMEOUT_MS` — proxy timeout in milliseconds
+
+## Deployment
+
+### Render
+
+Configured via `render.yaml`. Auto-deploys from `main` branch.
+Backend defaults: 1 iteration, ML disabled (fits within free-tier 30s timeout).
+Frontend overrides can request more iterations if needed.
+
+### Hugging Face Spaces
+
+Configured via `Dockerfile`. Uses Streamlit mode on port 7860.
 
 ## Contributing
 
