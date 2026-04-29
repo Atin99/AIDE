@@ -576,6 +576,14 @@ function renderCompareTable(results) {
     });
     html += '</tr>';
   });
+  // Composite score summary row (same penalised formula used everywhere)
+  html += '<tr style="border-top:2px solid var(--border);font-weight:600"><td>Composite Score</td>';
+  results.forEach(function(r) {
+    var cs = r.data.result && r.data.result.composite_score != null ? Number(r.data.result.composite_score) : null;
+    var cls = cs != null ? (cs >= 70 ? "score-pass" : cs >= 40 ? "score-warn" : "score-fail") : "";
+    html += '<td class="' + cls + '">' + (cs != null ? cs.toFixed(1) : "?") + '</td>';
+  });
+  html += '</tr>';
   html += '</tbody></table>';
   container.innerHTML = html;
 }
