@@ -356,39 +356,29 @@ class ApplicationResearcher:
         ).validate()
 
     def _infer_application(self, q: str) -> str:
-        if any(k in q for k in ["fuse alloy", "fuse wire", "fusible", "fusible wire", "low melting", "low-melting", "solder", "solder alloy", "thermal fuse", "fusible link", "braze filler", "liquid metal"]):
-            return "fusible_alloy"
-        if any(k in q for k in ["chip alloy", "chip package", "semiconductor", "interconnect", "bond wire", "wire bond", "solder bump", "leadframe", "microelectronics", "electronic packaging"]):
-            return "electronic_alloy"
-        if any(k in q for k in ["stainless", "duplex", "marine", "chloride", "pitting"]):
+        """Minimal heuristic — only match when the user EXPLICITLY names
+        a material family.  Everything ambiguous defaults to open_alloy
+        so the LLM researcher + physics scoring decide the family."""
+        # Explicit material names only
+        if any(k in q for k in ["stainless", "duplex"]):
             return "stainless"
-        if any(k in q for k in ["any alloy", "any composition", "unrestricted composition", "any elements", "no element restriction"]):
-            return "open_alloy"
-        if any(k in q for k in ["titanium", "ti-6", "ti alloy"]):
-            return "ti_alloy"
-        if any(k in q for k in ["aluminum", "aluminium", "duralumin"]):
-            return "al_alloy"
-        if self._is_aerospace_structure_query(q) and "lightweight" in q and not self._is_hot_section_query(q):
-            return "ti_alloy"
-        if any(k in q for k in ["superalloy", "inconel", "creep"]) or self._is_hot_section_query(q):
+        if any(k in q for k in ["superalloy", "inconel", "hastelloy", "waspaloy", "mar-m"]):
             return "superalloy"
-        if any(k in q for k in ["nuclear", "reactor", "zircaloy", "cladding"]):
+        if any(k in q for k in ["titanium", "ti-6", "ti alloy", "ti-64"]):
+            return "ti_alloy"
+        if any(k in q for k in ["aluminum", "aluminium", "duralumin", "al alloy"]):
+            return "al_alloy"
+        if any(k in q for k in ["zircaloy", "zirconium alloy"]):
             return "nuclear"
-        if any(k in q for k in ["implant", "biomedical", "surgical", "dental"]):
-            return "biomedical"
-        if any(k in q for k in ["refractory", "1200c", "1500c", "ultra high temperature"]):
-            return "refractory"
-        if any(k in q for k in ["transmission wire", "transmission line", "overhead line", "overhead conductor", "power line conductor"]):
-            return "open_alloy"
-        if any(k in q for k in ["wire", "busbar", "copper", "bronze", "brass"]):
-            return "cu_alloy"
-        if any(k in q for k in ["tool steel", "die steel", "hardfacing", "abrasive slurry"]):
-            return "carbon_steel"
         if any(k in q for k in ["carbon steel", "mild steel", "plain carbon"]):
             return "carbon_steel"
-        if any(k in q for k in ["steel", "structural"]):
-            return "structural"
-        return "general_structural"
+        # Explicit special-purpose alloys
+        if any(k in q for k in ["solder", "fusible", "braze filler", "low melting", "low-melting", "thermal fuse"]):
+            return "fusible_alloy"
+        if any(k in q for k in ["semiconductor", "chip package", "bond wire", "wire bond", "leadframe", "microelectronics"]):
+            return "electronic_alloy"
+        # Everything else: let the LLM and physics engine decide
+        return "open_alloy"
 
     def _infer_properties(self, q: str) -> list[str]:
         mapping = {
