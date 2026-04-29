@@ -342,7 +342,31 @@ def run_all(comp: dict, T_K: float = 298.0, dpa_rate: float = 1e-7,
     total_base = sum(base for _, base, _ in results) if results else 1.0
     total_effective = sum(eff for _, _, eff in results) if results else 1.0
     composite_raw = sum(dr.score() * base for dr, base, _ in results) / total_base if results else 0.0
-    composite = sum(dr.score() * eff for dr, _, eff in results) / total_effective if results else 0.0
+    weighted_mean = sum(dr.score() * eff for dr, _, eff in results) / total_effective if results else 0.0
+
+    # --- Penalised composite: punish uneven & catastrophic profiles ---
+    # An alloy scoring 80 everywhere beats one scoring 100×4 + 0×1.
+    domain_scores = [dr.score() for dr, _, _ in results]
+    if domain_scores and weighted_mean > 0:
+        import statistics
+        n_domains = len(domain_scores)
+        min_score = min(domain_scores)
+        # 1) Coefficient-of-variation penalty  (std/mean penalises spread)
+        if n_domains > 1:
+            stdev = statistics.stdev(domain_scores)
+            cv = stdev / max(1.0, weighted_mean)
+        else:
+            cv = 0.0
+        cv_penalty = max(0.5, 1.0 - 0.5 * cv)       # at most halves the score
+        # 2) Catastrophe penalty for any domain < 20
+        if min_score >= 20:
+            catastrophe = 1.0
+        else:
+            catastrophe = max(0.25, min_score / 20.0)  # 0 → 0.25, 10 → 0.75, 20 → 1.0
+        composite = weighted_mean * cv_penalty * catastrophe
+    else:
+        composite = weighted_mean
+
     fails = [(dr.domain_name, ch) for dr, _, _ in results for ch in dr.checks if ch.status == "FAIL"]
     warnings = [(dr.domain_name, ch) for dr, _, _ in results for ch in dr.checks if ch.status == "WARN"]
     passes = [(dr.domain_name, ch) for dr, _, _ in results for ch in dr.checks if ch.status == "PASS"]
@@ -355,6 +379,7 @@ def run_all(comp: dict, T_K: float = 298.0, dpa_rate: float = 1e-7,
         "domain_results": [dr for dr, _, _ in results],
         "composite_score": composite,
         "composite_score_raw": composite_raw,
+        "composite_score_weighted_mean": weighted_mean,
         "n_pass": len(passes),
         "n_warn": len(warnings),
         "n_fail": len(fails),

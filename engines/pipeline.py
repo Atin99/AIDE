@@ -403,12 +403,15 @@ def _apply_intent_to_wt(wt, intent, query=""):
                 wt = _set_floor(wt, "Mo", 0.02)
 
     if "high_temperature_strength" in props or "creep_resistance" in props:
-        if "Ni" not in exclude:
-            wt = _set_floor(wt, "Ni", 0.20)
-        elif "Co" not in exclude:
-            wt = _set_floor(wt, "Co", 0.15)
-        if "Cr" not in exclude:
-            wt = _set_floor(wt, "Cr", 0.12)
+        # Only force Ni/Co/Cr floors on compositions that are already Ni/Co/Fe-based.
+        # A Ti-alloy can also be high-temp (e.g. Ti-6242) without needing 20% Ni.
+        if dominant_el in {"Ni", "Co", "Fe"}:
+            if "Ni" not in exclude:
+                wt = _set_floor(wt, "Ni", 0.20)
+            elif "Co" not in exclude:
+                wt = _set_floor(wt, "Co", 0.15)
+            if "Cr" not in exclude:
+                wt = _set_floor(wt, "Cr", 0.12)
 
     if "wear_resistance" in props or "hardness" in props:
         if intent.get("application") in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:
@@ -477,16 +480,18 @@ def _apply_intent_to_wt(wt, intent, query=""):
 
         wt = _apply_caps(wt, lightweight_caps)
 
-        if app == "ti_alloy" and "Ti" not in exclude:
+        # Only force lightweight-base floors when the composition's dominant
+        # element already matches — don't coerce a Ni superalloy into Ti-base.
+        if app == "ti_alloy" and dominant_el == "Ti" and "Ti" not in exclude:
             wt = _set_floor(wt, "Ti", 0.78)
-        elif app == "al_alloy" and "Al" not in exclude:
+        elif app == "al_alloy" and dominant_el == "Al" and "Al" not in exclude:
             wt = _set_floor(wt, "Al", 0.88)
         elif app in {"structural", "general_structural", "open_alloy"}:
-            if _is_aerospace_structure_query(q) and "Ti" not in exclude:
+            if _is_aerospace_structure_query(q) and dominant_el == "Ti" and "Ti" not in exclude:
                 wt = _set_floor(wt, "Ti", 0.45)
-            elif "Al" not in exclude:
+            elif dominant_el == "Al" and "Al" not in exclude:
                 wt = _set_floor(wt, "Al", 0.30)
-        elif app == "superalloy" and not _is_hot_section_query(q):
+        elif app == "superalloy" and not _is_hot_section_query(q) and dominant_el in {"Ni", "Co"}:
             if "Ti" not in exclude:
                 wt = _set_floor(wt, "Ti", 0.08)
             if "Al" not in exclude:
@@ -1048,9 +1053,8 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
             )
 
     parts.append(f"\nPropose {target_n} diverse alloy compositions as weight fractions summing to 1.0.")
-    parts.append("CRITICAL: Explore MULTIPLE alloy families. For example, for aerospace you might try Ti alloys, Ni superalloys, Al alloys, and high-strength steels.")
-    parts.append("Each candidate MUST use a DIFFERENT base element or alloy family. Do NOT make all candidates the same family.")
-    parts.append("Vary dominant elements, minor additions, and element count across families.")
+    parts.append("Where metallurgically appropriate, consider exploring multiple alloy families (e.g. Ti, Ni, Al, Fe-based). But prioritise metallurgical correctness for the stated query — do NOT force unrelated families if the query clearly targets one.")
+    parts.append("Vary minor additions and element counts across candidates.")
     parts.append("Keep each rationale to 12 words or fewer.")
 
     system = (
