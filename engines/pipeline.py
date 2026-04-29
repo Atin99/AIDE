@@ -350,134 +350,50 @@ def _apply_intent_to_wt(wt, intent, query=""):
             continue
         wt = _set_floor(wt, symbol, 0.01)
 
-    if app == "stainless":
-        if "Fe" not in exclude:
-            wt = _set_floor(wt, "Fe", 0.50)
+    # Application-specific constraints ONLY apply if the composition's dominant
+    # element already matches the family.  This preserves multi-family diversity:
+    # a Ti-dominant composition won't get forced to Fe>=0.65 just because the
+    # researcher picked "structural".
+    dominant_el = max(wt, key=wt.get) if wt else ""
+
+    if app == "stainless" and dominant_el == "Fe":
         if "Cr" not in exclude:
             wt = _set_floor(wt, "Cr", 0.12)
-        # Austenitic grades (marine, corrosion) need Ni; ferritic does not
         is_ferritic = any(k in q for k in ["ferritic", "430", "409", "ni-free"])
         if "Ni" not in exclude and not is_ferritic:
-            ni_floor = 0.08  # default austenitic minimum
+            ni_floor = 0.08
             if any(k in q for k in ["marine", "seawater", "chloride", "316", "pitting", "offshore"]):
-                ni_floor = 0.10  # marine austenitic needs higher Ni
+                ni_floor = 0.10
             elif any(k in q for k in ["duplex", "2205", "2507"]):
-                ni_floor = 0.05  # duplex has lower Ni
+                ni_floor = 0.05
             wt = _set_floor(wt, "Ni", ni_floor)
         if "Mo" not in exclude and any(k in q for k in ["marine", "chloride", "seawater", "pitting", "316", "offshore"]):
             wt = _set_floor(wt, "Mo", 0.02)
-        wt = _apply_caps(wt, {
-            "Re": 0.005, "Ta": 0.01, "Hf": 0.005, "W": 0.05, "Co": 0.08,
-            "Nb": 0.08, "Al": 0.03, "Ga": 0.01, "In": 0.01, "Bi": 0.005,
-            "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
-        })
 
-    if app in {"structural", "general_structural"}:
-        if "Fe" not in exclude:
-            wt = _set_floor(wt, "Fe", 0.65)
-        wt = _apply_caps(wt, {
-            "C": 0.02, "Cr": 0.10, "Mn": 0.12, "Si": 0.05, "Cu": 0.05,
-            "Ni": 0.10, "Co": 0.06, "Mo": 0.04, "V": 0.03, "Ti": 0.03,
-            "W": 0.01, "Nb": 0.03,
-            "Re": 0.005, "Ta": 0.005, "Hf": 0.005, "Bi": 0.005, "Pb": 0.0,
-            "Cd": 0.0, "Hg": 0.0,
-        })
+    if app in {"structural", "general_structural"} and dominant_el == "Fe":
         if _is_heavy_structure_query(q) or "weldability" in props or "fatigue_resistance" in props:
-            if "Fe" not in exclude:
-                wt = _set_floor(wt, "Fe", 0.78)
-            wt = _apply_caps(wt, {
-                "C": 0.012, "Cr": 0.06, "Mn": 0.10, "Si": 0.04, "Cu": 0.04,
-                "Ni": 0.06, "Mo": 0.03, "V": 0.025, "Nb": 0.025, "Ti": 0.02,
-            })
+            wt = _apply_caps(wt, {"C": 0.012})
 
-    if app == "carbon_steel":
-        if "Fe" not in exclude:
-            wt = _set_floor(wt, "Fe", 0.90)
-        if "C" not in exclude:
-            wt = _set_floor(wt, "C", 0.001)
-        wt = _apply_caps(wt, {
-            "Ni": 0.08, "Co": 0.03, "Cr": 0.12, "Mo": 0.06, "W": 0.02,
-            "Nb": 0.03, "Re": 0.002, "Ta": 0.002, "Hf": 0.002, "Pb": 0.0,
-            "Cd": 0.0, "Hg": 0.0,
-        })
-
-    if app == "superalloy":
-        if "Ni" not in exclude:
-            wt = _set_floor(wt, "Ni", 0.45)
-        elif "Co" not in exclude:
-            wt = _set_floor(wt, "Co", 0.30)
+    if app == "superalloy" and dominant_el in {"Ni", "Co"}:
         if "Cr" not in exclude:
             wt = _set_floor(wt, "Cr", 0.08)
-        wt = _apply_caps(wt, {
-            "Fe": 0.25, "Cu": 0.05, "Zn": 0.02, "Ga": 0.02, "In": 0.02,
-            "Bi": 0.005, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
-        })
 
-    if app == "ti_alloy":
-        if "Ti" not in exclude:
-            wt = _set_floor(wt, "Ti", 0.70)
-        wt = _apply_caps(wt, {
-            "Ni": 0.03, "Co": 0.02, "Cu": 0.03, "W": 0.01, "Re": 0.005,
-            "Ta": 0.08, "Hf": 0.03, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
-        })
+    if app == "ti_alloy" and dominant_el == "Ti":
+        pass  # Ti alloys are fine as-is; no extra constraints needed
 
-    if app == "al_alloy":
-        if "Al" not in exclude:
-            wt = _set_floor(wt, "Al", 0.80)
-        wt = _apply_caps(wt, {
-            "W": 0.01, "Re": 0.005, "Ta": 0.005, "Hf": 0.005, "Nb": 0.02,
-            "Mo": 0.02, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
-        })
+    if app == "al_alloy" and dominant_el == "Al":
+        pass  # Al alloys are fine as-is
 
-    if app == "nuclear":
-        if "Zr" not in exclude:
-            wt = _set_floor(wt, "Zr", 0.78)
-        wt = _apply_caps(wt, {
-            "Ni": 0.03, "Co": 0.02, "Cu": 0.02, "W": 0.02, "Re": 0.005,
-            "Ta": 0.01, "Hf": 0.02, "Pb": 0.0, "Cd": 0.0, "Hg": 0.0,
-        })
+    if app == "nuclear" and dominant_el == "Zr":
+        pass  # Zr alloys are fine as-is
 
-    if app == "biomedical":
-        if "Ti" not in exclude and "Co" in exclude:
-            wt = _set_floor(wt, "Ti", 0.55)
-        wt = _apply_caps(wt, {
-            "Pb": 0.0, "Cd": 0.0, "Hg": 0.0, "Bi": 0.005, "Ga": 0.02,
-        })
+    if app == "cu_alloy" and dominant_el == "Cu":
+        pass  # Cu alloys are fine as-is
 
-    if intent.get("application") == "cu_alloy":
-        wt = _set_floor(wt, "Cu", 0.55)
-        if family == "brass":
-            if "Zn" not in exclude:
-                wt = _set_floor(wt, "Zn", 0.22)
-            for symbol, cap in {"Sn": 0.08, "Al": 0.07, "Ni": 0.07, "Si": 0.05, "Fe": 0.05, "Cr": 0.03, "Mo": 0.02, "W": 0.01}.items():
-                if symbol in wt:
-                    wt[symbol] = min(wt[symbol], cap)
-        elif family == "bronze":
-            if "Sn" not in exclude:
-                wt = _set_floor(wt, "Sn", 0.08)
-            for symbol, cap in {"Zn": 0.04, "Al": 0.06, "Si": 0.05, "Fe": 0.05, "Ni": 0.05, "Mn": 0.05, "Cr": 0.03, "Mo": 0.02, "W": 0.01}.items():
-                if symbol in wt:
-                    wt[symbol] = min(wt[symbol], cap)
-        elif family == "aluminum_bronze":
-            if "Al" not in exclude:
-                wt = _set_floor(wt, "Al", 0.05)
-            for symbol, cap in {"Zn": 0.03, "Sn": 0.05, "Cr": 0.03, "Mo": 0.02}.items():
-                if symbol in wt:
-                    wt[symbol] = min(wt[symbol], cap)
-        elif family == "phosphor_bronze":
-            if "Sn" not in exclude:
-                wt = _set_floor(wt, "Sn", 0.04)
-            if "P" not in exclude:
-                wt = _set_floor(wt, "P", 0.002)
-            for symbol, cap in {"Zn": 0.03, "Cr": 0.02, "Mo": 0.02}.items():
-                if symbol in wt:
-                    wt[symbol] = min(wt[symbol], cap)
-        elif family == "silicon_bronze":
-            if "Si" not in exclude:
-                wt = _set_floor(wt, "Si", 0.01)
-            for symbol, cap in {"Zn": 0.03, "Sn": 0.05, "Cr": 0.02, "Mo": 0.02}.items():
-                if symbol in wt:
-                    wt[symbol] = min(wt[symbol], cap)
+    # Toxic element caps apply universally regardless of family
+    for toxic in ["Pb", "Cd", "Hg"]:
+        if toxic in wt and wt[toxic] > 0.005:
+            wt[toxic] = 0.0
 
     if "corrosion_resistance" in props:
         if intent.get("application") in {"stainless", "superalloy", "structural", "carbon_steel", "general_structural", "open_alloy"}:

@@ -141,13 +141,32 @@
           </div>
           <h2>Multi-Alloy Comparison</h2>
         </div>
-        <p class="panel-desc">Select up to 5 alloys to compare across all physics domains with an interactive radar chart.</p>
+        <p class="panel-desc">Compare database alloys and custom compositions across all 42 physics domains.</p>
         <div id="compareList" class="compare-list"></div>
+
+        <!-- Database alloy selector -->
         <div class="compare-controls">
           <select id="compareAddSelect">
-            <option value="">-- Add alloy --</option>
+            <option value="">-- Add database alloy --</option>
           </select>
-          <button type="button" id="compareAddBtn" class="btn-secondary">Add</button>
+          <button type="button" id="compareAddBtn" class="btn-secondary">Add Alloy</button>
+        </div>
+
+        <!-- Custom composition grid -->
+        <details class="custom-comp-details" id="customCompDetails">
+          <summary class="custom-comp-summary">＋ Add Custom Composition</summary>
+          <div class="custom-comp-body">
+            <div id="compareElementGrid" class="element-grid"></div>
+            <div class="comp-footer">
+              <span id="compareCompTotal" class="comp-total">Total: 0.0%</span>
+              <button type="button" id="compareNormalizeBtn" class="btn-secondary">Normalize to 100%</button>
+              <input type="text" id="customCompName" placeholder="Label (e.g. My Ti Alloy)" style="width: 180px;" />
+              <button type="button" id="compareAddCustomBtn" class="btn-secondary" style="background: rgba(93,217,168,0.12); color: var(--success); border-color: rgba(93,217,168,0.25);">Add to Compare</button>
+            </div>
+          </div>
+        </details>
+
+        <div style="margin-top: 12px;">
           <button type="button" id="compareRunBtn" class="btn-primary" disabled>
             <span class="btn-text">Compare All</span>
             <span class="spinner hidden" id="compareSpinner"></span>

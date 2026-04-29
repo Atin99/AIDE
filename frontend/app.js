@@ -392,22 +392,126 @@ $("analyzeCompBtn").addEventListener("click", async function() {
 
 /* ---------- Multi-Compare ---------- */
 
+// COMPARE_LIST stores objects: { name: string, composition_wt: {}, type: "db"|"custom" }
+
+function buildCompareElementGrid() {
+  var grid = $("compareElementGrid");
+  grid.innerHTML = "";
+  ELEMENTS.forEach(function(el) {
+    var item = document.createElement("div");
+    item.className = "el-item";
+    item.innerHTML = '<span class="el-symbol">' + el + '</span>'
+      + '<button type="button" class="el-btn" data-cel="' + el + '" data-dir="-1">-</button>'
+      + '<input type="number" class="el-input" id="cel_' + el + '" value="0.00" min="0" max="100" step="0.5" />'
+      + '<button type="button" class="el-btn" data-cel="' + el + '" data-dir="1">+</button>'
+      + '<span class="el-unit">%</span>';
+    grid.appendChild(item);
+  });
+  grid.querySelectorAll(".el-btn[data-cel]").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var inp = $("cel_" + btn.dataset.cel);
+      var val = parseFloat(inp.value) || 0;
+      val += parseFloat(btn.dataset.dir) * 0.5;
+      if (val < 0) val = 0; if (val > 100) val = 100;
+      inp.value = val.toFixed(2);
+      updateCompareTotal();
+    });
+  });
+  grid.querySelectorAll(".el-input").forEach(function(inp) {
+    if (inp.id && inp.id.startsWith("cel_")) {
+      inp.addEventListener("input", updateCompareTotal);
+    }
+  });
+}
+
+function updateCompareTotal() {
+  var total = 0;
+  ELEMENTS.forEach(function(el) {
+    var inp = $("cel_" + el);
+    if (inp) total += parseFloat(inp.value) || 0;
+  });
+  $("compareCompTotal").textContent = "Total: " + total.toFixed(2) + "%";
+  $("compareCompTotal").style.color = (total > 99.5 && total < 100.5) ? "var(--success)" : (total > 100.5 ? "var(--danger)" : "var(--warn)");
+}
+
+function getCompareGridComposition() {
+  var comp = {};
+  ELEMENTS.forEach(function(el) {
+    var inp = $("cel_" + el);
+    var val = inp ? (parseFloat(inp.value) || 0) : 0;
+    if (val > 0) comp[el] = val / 100;
+  });
+  return comp;
+}
+
+function clearCompareGrid() {
+  ELEMENTS.forEach(function(el) {
+    var inp = $("cel_" + el);
+    if (inp) inp.value = "0.00";
+  });
+  updateCompareTotal();
+}
+
+$("compareNormalizeBtn").addEventListener("click", function() {
+  var total = 0;
+  ELEMENTS.forEach(function(el) {
+    var inp = $("cel_" + el);
+    if (inp) total += parseFloat(inp.value) || 0;
+  });
+  if (total <= 0) return;
+  ELEMENTS.forEach(function(el) {
+    var inp = $("cel_" + el);
+    if (inp) inp.value = (((parseFloat(inp.value) || 0) / total) * 100).toFixed(2);
+  });
+  updateCompareTotal();
+});
+
 $("compareAddBtn").addEventListener("click", function() {
   var key = $("compareAddSelect").value;
-  if (!key || COMPARE_LIST.length >= 5 || COMPARE_LIST.indexOf(key) >= 0) return;
-  COMPARE_LIST.push(key);
+  if (!key || COMPARE_LIST.length >= 8) return;
+  for (var i = 0; i < COMPARE_LIST.length; i++) {
+    if (COMPARE_LIST[i].name === key) return;
+  }
+  var alloy = findAlloy(key);
+  if (!alloy) return;
+  COMPARE_LIST.push({ name: key, composition_wt: alloy.composition_wt, type: "db" });
+  renderCompareList();
+});
+
+$("compareAddCustomBtn").addEventListener("click", function() {
+  var comp = getCompareGridComposition();
+  if (Object.keys(comp).length < 1) {
+    showError("Set at least 1 element in the grid above.");
+    return;
+  }
+  if (COMPARE_LIST.length >= 8) return;
+  // Normalize
+  var total = 0;
+  for (var k in comp) total += comp[k];
+  if (total > 0 && Math.abs(total - 1.0) > 0.01) {
+    for (var k in comp) comp[k] = comp[k] / total;
+  }
+  var label = ($("customCompName").value || "").trim();
+  if (!label) {
+    label = "Custom-" + (COMPARE_LIST.length + 1);
+  }
+  COMPARE_LIST.push({ name: label, composition_wt: comp, type: "custom" });
+  $("customCompName").value = "";
+  clearCompareGrid();
   renderCompareList();
 });
 
 function renderCompareList() {
   var container = $("compareList");
   container.innerHTML = "";
-  COMPARE_LIST.forEach(function(key, i) {
+  COMPARE_LIST.forEach(function(entry, i) {
     var tag = document.createElement("span");
     tag.className = "compare-tag";
     var c = COMPARE_COLORS[i % COMPARE_COLORS.length];
     tag.style.cssText = "background:" + c + "22;color:" + c + ";border:1px solid " + c + "44";
-    tag.innerHTML = escapeHtml(key) + ' <button>&times;</button>';
+    var typeLabel = entry.type === "custom" ? " ★" : "";
+    var compHint = fmtComp(entry.composition_wt, 3);
+    tag.innerHTML = escapeHtml(entry.name + typeLabel) + ' <span style="font-size:0.7em;opacity:0.7">' + escapeHtml(compHint) + '</span> <button>&times;</button>';
     tag.querySelector("button").addEventListener("click", function() {
       COMPARE_LIST.splice(i, 1); renderCompareList();
     });
@@ -422,12 +526,11 @@ $("compareRunBtn").addEventListener("click", async function() {
   try {
     var results = [];
     for (var i = 0; i < COMPARE_LIST.length; i++) {
-      var alloy = findAlloy(COMPARE_LIST[i]);
-      if (!alloy) continue;
+      var entry = COMPARE_LIST[i];
       var payload = await callApi("/api/v1/run", "POST", {
-        composition: alloy.composition_wt, basis: "wt", temperature_K: 298, weight_profile: "auto",
+        composition: entry.composition_wt, basis: "wt", temperature_K: 298, weight_profile: "auto",
       });
-      results.push({ name: COMPARE_LIST[i], data: payload.data });
+      results.push({ name: entry.name, data: payload.data });
     }
     renderCompareCharts(results);
     renderCompareTable(results);
@@ -732,6 +835,7 @@ initApiBase();
 initTabs();
 initViewToggle();
 buildElementGrid();
+buildCompareElementGrid();
 checkHealth();
 loadAlloys();
 
