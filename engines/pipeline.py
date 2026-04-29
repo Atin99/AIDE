@@ -342,10 +342,8 @@ def _apply_intent_to_wt(wt, intent, query=""):
     family = (constraints.get("alloy_family") or "").lower()
     q = (query or "").lower()
 
-    if rd and rd.base_elements:
-        base = rd.base_elements[0]
-        if base not in exclude:
-            wt[base] = max(wt.get(base, 0.0), max(0.15, float(rd.base_min_fraction) * 1.02))
+    # NOTE: We intentionally do NOT force the researcher's base element here.
+    # This allows multi-family diversity — the physics engine scores everything.
 
     for symbol in must:
         if symbol in exclude:
@@ -840,12 +838,6 @@ Rules:
         wt = {k: v / total for k, v in wt.items()}
         mol = validate_composition(wt_to_mol(wt))
         
-        if rd:
-            violated, reason = rd.composition_violates_base(wt)
-            if violated:
-                logger.warning(f"[BASELINE] LLM baseline violated constraint: {reason}")
-                return None
-        
         return Candidate(composition=mol, composition_wt=wt,
                          rationale=result.get("rationale", "LLM reasoning"))
     except Exception as e:
@@ -893,8 +885,11 @@ def _emergency_seed_candidates(intent, query, target=50):
     import random as _rng
     rng = _rng.Random(42)
 
-    app = intent.get("application", "structural")
-    seeds = _EMERGENCY_SEEDS.get(app, _EMERGENCY_SEEDS["structural"])
+    # Use seeds from ALL families for multi-family diversity
+    seeds = []
+    for family_seeds in _EMERGENCY_SEEDS.values():
+        seeds.extend(family_seeds)
+    rng.shuffle(seeds)
 
     candidates = []
     for seed in seeds:
@@ -1119,11 +1114,9 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
     
     rd = intent.get("research_data")
     if rd:
-        parts.append(f"\nHARD CONSTRAINTS you MUST respect:")
-        parts.append(f"  - Base element(s): {rd.base_elements}")
-        parts.append(f"  - Base min mass fraction: {rd.base_min_fraction:.2f}")
-        parts.append(f"  - Forbidden: {rd.forbidden_elements}")
-        parts.append(f"  - Mechanisms to enforce: {rd.mandatory_mechanisms}")
+        parts.append(f"\nResearcher suggested base: {rd.base_elements} (this is ONE option, not a hard constraint)")
+        if rd.forbidden_elements:
+            parts.append(f"  - Avoid if possible: {rd.forbidden_elements}")
 
     if baseline:
         comp_str = _compact_comp(baseline.composition_wt, top=6, digits=2)
@@ -1139,9 +1132,9 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
             )
 
     parts.append(f"\nPropose {target_n} diverse alloy compositions as weight fractions summing to 1.0.")
-    parts.append("Vary chemistry families, dominant elements, minor additions, and element count.")
-    parts.append("Avoid near-duplicates and do not repeat the same top-3 element set unless ratios materially change.")
-    parts.append("At least one candidate should test a different mechanism than the baseline.")
+    parts.append("CRITICAL: Explore MULTIPLE alloy families. For example, for aerospace you might try Ti alloys, Ni superalloys, Al alloys, and high-strength steels.")
+    parts.append("Each candidate MUST use a DIFFERENT base element or alloy family. Do NOT make all candidates the same family.")
+    parts.append("Vary dominant elements, minor additions, and element count across families.")
     parts.append("Keep each rationale to 12 words or fewer.")
 
     system = (
@@ -1173,12 +1166,7 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
             wt = _apply_intent_to_wt(wt, intent, query)
             mol = validate_composition(wt_to_mol(wt))
             
-            if rd:
-                violated, reason = rd.composition_violates_base(wt)
-                if violated:
-                    logger.debug(f"[_llm_generate] Skipping candidate - {reason}")
-                    continue
-                    
+            # No family filtering — we want multi-family diversity
             candidates.append(
                 Candidate(
                     composition=mol,
@@ -1193,24 +1181,60 @@ def _llm_generate(query, intent, baseline, n, feedback=None):
 
 
 class PhysicsMLEvaluator:
-    _MECHANISM_CHECKS = {
-        "gamma_prime": (lambda c: c.get("Al", 0) + c.get("Ti", 0) >= 0.04, "γ' precipitation requires Al+Ti >= 4 mol%"),
-        "precipitation_hard": (lambda c: c.get("Cu", 0) + c.get("Mg", 0) + c.get("Zn", 0) >= 0.005, "Precipitation requires Cu+Mg+Zn >= 0.5 mol%"),
-        "martensite": (lambda c: c.get("C", 0) >= 0.003, "Martensite requires C >= 0.3 mol%"),
-        "alpha_beta": (lambda c: (c.get("V",0)+c.get("Mo",0)+c.get("Nb",0)+c.get("Cr",0)) >= 0.02, "α+β Ti needs β-stabilisers >= 2 mol%"),
-        "solid_solution": (lambda c: len([v for v in c.values() if v > 0.005]) >= 2, "Solid solution requires >=2 solute elements"),
-        "carbide": (lambda c: c.get("C", 0) >= 0.002 and c.get("Cr", 0) + c.get("W", 0) >= 0.10, "Carbide needs C >= 0.2% and (Cr+W) >= 10%"),
+    # Proportional mechanism checks: each returns (ratio 0-1, threshold, description).
+    # ratio = how close the composition is to meeting the mechanism requirement.
+    _MECHANISM_CHECKS_PROPORTIONAL = {
+        "gamma_prime": (
+            lambda c: min(1.0, (c.get("Al", 0) + c.get("Ti", 0)) / 0.04) if 0.04 > 0 else 1.0,
+            "γ' precipitation favours Al+Ti >= 4 mol%",
+        ),
+        "precipitation_hard": (
+            lambda c: min(1.0, (c.get("Cu", 0) + c.get("Mg", 0) + c.get("Zn", 0)) / 0.005) if 0.005 > 0 else 1.0,
+            "Precipitation favours Cu+Mg+Zn >= 0.5 mol%",
+        ),
+        "martensite": (
+            lambda c: min(1.0, c.get("C", 0) / 0.003) if 0.003 > 0 else 1.0,
+            "Martensite favours C >= 0.3 mol%",
+        ),
+        "alpha_beta": (
+            lambda c: min(1.0, (c.get("V", 0) + c.get("Mo", 0) + c.get("Nb", 0) + c.get("Cr", 0)) / 0.02) if 0.02 > 0 else 1.0,
+            "α+β Ti favours β-stabilisers >= 2 mol%",
+        ),
+        "solid_solution": (
+            lambda c: min(1.0, len([v for v in c.values() if v > 0.005]) / 2.0),
+            "Solid solution favours >= 2 solute elements",
+        ),
+        "carbide": (
+            lambda c: min(1.0, (min(c.get("C", 0) / 0.002, 1.0) + min((c.get("Cr", 0) + c.get("W", 0)) / 0.10, 1.0)) / 2.0),
+            "Carbide favours C >= 0.2% and (Cr+W) >= 10%",
+        ),
     }
 
     @classmethod
-    def _check_mechanisms(cls, composition, mechanisms):
+    def _check_mechanisms_penalty(cls, composition, mechanisms):
+        """Return (penalty_factor, reasons) where penalty is 0.0-1.0.
+        
+        1.0 = all mechanisms satisfied. < 1.0 = proportional shortfall.
+        Never hard-rejects; the penalty is multiplicative on the score.
+        """
+        penalties = []
+        reasons = []
         for mechanism in mechanisms:
             mech_lower = mechanism.lower().replace(" ", "_").replace("-", "_")
-            for keyword, (check_fn, msg) in cls._MECHANISM_CHECKS.items():
+            for keyword, (ratio_fn, msg) in cls._MECHANISM_CHECKS_PROPORTIONAL.items():
                 if keyword in mech_lower:
-                    if not check_fn(composition):
-                        return f"Mandatory mechanism '{mechanism}' failed: {msg}"
-        return None
+                    ratio = max(0.0, min(1.0, ratio_fn(composition)))
+                    if ratio < 1.0:
+                        # Smooth penalty: ratio^0.6 so partial fulfilment is gently penalised
+                        penalty = max(0.15, ratio ** 0.6)
+                        penalties.append(penalty)
+                        reasons.append(f"{mechanism} ({ratio:.0%} met): {msg}")
+        if not penalties:
+            return 1.0, []
+        combined = 1.0
+        for p in penalties:
+            combined *= p
+        return max(0.10, combined), reasons
 
     @staticmethod
     def _overalloying_penalty(composition, query):
@@ -1377,8 +1401,11 @@ class PhysicsMLEvaluator:
     def evaluate(candidates, query="", T_K=298.0, weather=None, domains_focus=None,
                  constraints=None, dpa_rate=1e-7, pressure_MPa=0.0, research_data=None,
                  intent=None):
+        """Evaluate candidates using the 42-domain physics engine.
+        
+        Score = raw physics composite_score. No additional penalty layers.
+        """
         from physics.filter import run_all
-        import math
         for cand in candidates:
             try:
                 priority_map = research_data.domain_weights if research_data else None
@@ -1388,68 +1415,13 @@ class PhysicsMLEvaluator:
                 cand.physics_result = result
                 cand.physics_evaluated = True
 
-                base_score = result.get("composite_score", 0)
-                weight_comp = cand.composition_wt or mol_to_wt(cand.composition)
+                cand.score = result.get("composite_score", 0)
                 weak = []
-                domain_scores = {}
                 for dr in result.get("domain_results", []):
-                    domain_scores[dr.domain_name] = dr.score()
                     if dr.score() < 50:
                         weak.append({"name": dr.domain_name, "score": dr.score(),
                                      "fails": [c.name for c in dr.checks if c.status == "FAIL"]})
                 cand.weak_domains = weak
-                cand.score = base_score
-                
-                if research_data:
-                    violated, reason = research_data.composition_violates_base(weight_comp)
-                    if violated:
-                        cand.score = 0
-                        cand.weak_domains.append({"name": "Base Material Rejection", "score": 0, "fails": [reason]})
-                    else:
-                        # Apply proportional penalty for base element shortfall
-                        base_penalty = research_data.base_element_penalty(weight_comp)
-                        if base_penalty < 1.0:
-                            cand.score = round(cand.score * base_penalty, 2)
-                            cand.weak_domains.append({"name": "Base Element Shortfall", "score": int(base_penalty * 100),
-                                                      "fails": [f"{research_data.base_elements[0]} below target ({base_penalty:.0%} of requirement)"]})
-                    
-                    if cand.score > 0:
-                        mech_reason = PhysicsMLEvaluator._check_mechanisms(cand.composition, research_data.mandatory_mechanisms)
-                        if mech_reason:
-                            cand.score = 0
-                            cand.weak_domains.append({"name": "Critical Mechanism Rejection", "score": 0, "fails": [mech_reason]})
-
-                    if cand.score > 0:
-                        primary_weight_total = sum(research_data.domain_weights.values())
-                        residual_weight = max(0.0, 1.0 - primary_weight_total) / max(1, len(domain_scores) - len(research_data.domain_weights))
-                        weighted_sum = 0.0
-                        weight_used = 0.0
-                        for d_name, d_score in domain_scores.items():
-                            w = research_data.domain_weights.get(d_name, residual_weight)
-                            weighted_sum += w * d_score
-                            weight_used += w
-                        weighted_score = (weighted_sum / weight_used) if weight_used > 0 else base_score
-                        primary_count = len(getattr(research_data, "primary_domains", []) or [])
-                        primary_emphasis = min(0.75, 0.25 + 0.10 * primary_count)
-                        blended_score = (primary_emphasis * weighted_score) + ((1.0 - primary_emphasis) * base_score)
-                        
-                        penalty = PhysicsMLEvaluator._overalloying_penalty(weight_comp, query)
-                        alignment_multiplier, alignment_note = PhysicsMLEvaluator._application_alignment(
-                            weight_comp,
-                            query=query,
-                            application=(intent or {}).get("application", ""),
-                            family=((intent or {}).get("constraints") or {}).get("alloy_family", ""),
-                            research_data=research_data,
-                        )
-                        cand.score = round(max(0.0, min(100.0, blended_score * penalty * alignment_multiplier)), 2)
-                        
-                        if penalty < 0.8:
-                            cand.weak_domains.append({"name": "Over-alloying Penalty", "score": int(penalty*100), "fails": ["Excessive solute additions for application"]})
-                        if alignment_multiplier < 0.85 and alignment_note:
-                            cand.weak_domains.append({"name": "Application Mismatch", "score": int(alignment_multiplier * 100), "fails": [alignment_note]})
-
-                if constraints and cand.score > 0:
-                    _apply_constraints(cand, constraints)
                 cand.score_source = "physics"
                 try:
                     from ml.predict import get_predictor
@@ -1626,19 +1598,7 @@ def _cheap_candidate_score(cand, intent: dict, query: str) -> float:
         bad_frac = sum(comp.get(symbol, 0.0) for symbol in exclude)
         exclude_penalty = max(0.05, 1.0 - 8.0 * bad_frac)
 
-    if research_data:
-        violated, _ = research_data.composition_violates_base(_normalize_wt(comp))
-        if violated:
-            return 0.0
-
-    penalty = PhysicsMLEvaluator._overalloying_penalty(comp, query)
-    alignment_multiplier, _ = PhysicsMLEvaluator._application_alignment(
-        comp,
-        query=query,
-        application=intent.get("application", ""),
-        family=(intent.get("constraints") or {}).get("alloy_family", ""),
-        research_data=research_data,
-    )
+    # No family-based penalty — we want multi-family diversity
     density_multiplier = 1.0
     density_target = _density_target_for_intent(intent.get("application", ""), constraints, props, (query or "").lower())
     if density_target is not None:
@@ -1649,10 +1609,7 @@ def _cheap_candidate_score(cand, intent: dict, query: str) -> float:
         if density is not None and density > density_target:
             density_multiplier *= max(0.05, math.exp(-0.9 * (density - density_target)))
 
-        heavy_burden = sum(_normalize_wt(comp).get(el, 0.0) * weight for el, weight in LIGHTWEIGHT_HEAVY_ELEMENT_WEIGHTS.items())
-        density_multiplier *= max(0.05, 1.0 - min(0.92, 0.9 * heavy_burden))
-
-    return 100.0 * must_score * exclude_penalty * penalty * alignment_multiplier * density_multiplier
+    return 100.0 * must_score * exclude_penalty * density_multiplier
 
 
 def _downselect_candidates(candidates: list, limit: int, query: str, intent: dict) -> list:
@@ -1828,8 +1785,8 @@ class Pipeline:
         intent["research_data"] = research_data
 
         must_include, exclude_elements = _intent_required_elements(intent, query)
-        if research_data and research_data.base_elements and research_data.base_elements[0] not in exclude_elements:
-            must_include = sorted(set(must_include + [research_data.base_elements[0]]))
+        # NOTE: We do NOT add the researcher's base element to must_include.
+        # This allows the generator to explore multiple alloy families freely.
 
         intent["must_include"] = sorted(set((intent.get("must_include") or []) + must_include))
         intent["exclude_elements"] = sorted(set((intent.get("exclude_elements") or []) + exclude_elements))
@@ -1906,17 +1863,7 @@ class Pipeline:
                 if not cand.physics_evaluated:
                     cand.score = cand.screening_score
                     cand.score_source = "screen"
-            candidates, rejected_count = _filter_candidates_against_research(candidates, research_data)
-            if rejected_count:
-                iter_stats["rejected_by_research"] = rejected_count
-                self._log(
-                    step_counter,
-                    "screen",
-                    f"Rejected {rejected_count} off-request candidates",
-                    "Removed candidates that violated the inferred base family or forbidden-element rules",
-                    agent="Pipeline",
-                )
-                step_counter += 1
+            # No family-based filtering — we want multi-family diversity
             self.all_candidates.extend(candidates)
             if post_dedupe_count != pre_dedupe:
                 self._log(step_counter, "dedupe",

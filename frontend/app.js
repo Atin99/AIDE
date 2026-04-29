@@ -663,28 +663,21 @@ function renderCandidatesTable(data) {
   container.classList.remove("hidden");
   var title = detail.length ? "Candidate Pool (" + detail.length + " returned)" : "Top Candidates";
   var html = '<h3 style="margin: 16px 0 8px; font-size: 1rem;">' + escapeHtml(title) + '</h3>';
-  html += '<table><thead><tr><th>#</th><th>Type</th><th>Iter</th><th>Physics</th><th>Rank</th><th>Source</th><th>Composition</th></tr></thead><tbody>';
+  html += '<table><thead><tr><th>#</th><th>Type</th><th>Iter</th><th>Score</th><th>Source</th><th>Composition</th></tr></thead><tbody>';
 
   if (detail.length) {
     detail.forEach(function(cd, i) {
       var badgeCls = cd.result_type === "catalog" ? "badge-catalog" : "badge-generated";
       var badgeText = cd.result_type === "catalog" ? "CATALOG" : "GENERATED";
       var scoreSource = String(cd.score_source || "").toLowerCase();
-      var hasRejection = (cd.weak_domains || []).some(function(w) {
-        return String((w && w.name) || "").toLowerCase().indexOf("rejection") >= 0;
-      });
-      var source = "SCREEN ONLY";
-      if (cd.physics_evaluated && hasRejection) source = "REJECTED";
-      else if (cd.physics_evaluated && scoreSource === "physics_ml") source = "PHYSICS+ML";
+      var source = "SCREEN";
+      if (cd.physics_evaluated && scoreSource === "physics_ml") source = "PHYSICS+ML";
       else if (cd.physics_evaluated) source = "PHYSICS";
-      else if (scoreSource.indexOf("reject") >= 0) source = "REJECTED";
-      var physicsScore = cd.physics_score != null ? Number(cd.physics_score) : null;
-      var rankScore = cd.rank_score != null ? Number(cd.rank_score) : (cd.score != null ? Number(cd.score) : null);
+      var score = cd.physics_score != null ? Number(cd.physics_score) : (cd.score != null ? Number(cd.score) : null);
       html += '<tr><td>' + (i + 1) + '</td>';
       html += '<td><span class="badge ' + badgeCls + '">' + badgeText + '</span></td>';
       html += '<td>' + ((cd.iteration != null ? Number(cd.iteration) + 1 : "-")) + '</td>';
-      html += '<td>' + (physicsScore != null ? physicsScore.toFixed(1) : "-") + '</td>';
-      html += '<td>' + (rankScore != null ? rankScore.toFixed(1) : "-") + '</td>';
+      html += '<td>' + (score != null ? score.toFixed(1) : "-") + '</td>';
       html += '<td>' + escapeHtml(source) + '</td>';
       html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(cd.composition_wt || cd.composition || {}, 5)) + '</td></tr>';
     });
@@ -695,7 +688,6 @@ function renderCandidatesTable(data) {
       html += '<tr><td>' + (i + 1) + '</td>';
       html += '<td><span class="badge badge-generated">GENERATED</span></td>';
       html += '<td>-</td>';
-      html += '<td>' + (r.composite_score != null ? Number(r.composite_score).toFixed(1) : "?") + '</td>';
       html += '<td>' + (r.composite_score != null ? Number(r.composite_score).toFixed(1) : "?") + '</td>';
       html += '<td>PHYSICS</td>';
       html += '<td style="font-family: var(--mono); font-size: 0.78rem;">' + escapeHtml(fmtComp(comp, 5)) + '</td></tr>';

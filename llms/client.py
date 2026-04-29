@@ -61,6 +61,11 @@ PROVIDER_SPECS = [
 EMPTY_KEY_PREFIX = "your_"
 MAX_ERROR_DETAIL_CHARS = 500
 DEFAULT_HTTP_TIMEOUT_SECONDS = max(15, int(os.environ.get("AIDE_LLM_HTTP_TIMEOUT_SECONDS", "45")))
+
+def _allow_metered() -> bool:
+    """Return True only if the user explicitly opts into metered (paid) providers."""
+    return os.environ.get("AIDE_ALLOW_METERED_LLM", "0").strip().lower() in {"1", "true", "yes", "on"}
+
 DEFAULT_BROWSER_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -152,6 +157,9 @@ def get_available_providers(task: str = "chat") -> list[dict]:
                 }
             )
     providers.sort(key=lambda provider: (provider["_priority"], provider["_spec_index"]))
+    # Filter out metered providers unless explicitly allowed
+    if not _allow_metered():
+        providers = [p for p in providers if p.get("tier") == "free"]
     for provider in providers:
         provider.pop("_priority", None)
         provider.pop("_spec_index", None)
