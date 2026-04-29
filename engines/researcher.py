@@ -378,6 +378,8 @@ class ApplicationResearcher:
             return "biomedical"
         if any(k in q for k in ["refractory", "1200c", "1500c", "ultra high temperature"]):
             return "refractory"
+        if any(k in q for k in ["transmission wire", "transmission line", "overhead line", "overhead conductor", "power line conductor"]):
+            return "open_alloy"
         if any(k in q for k in ["wire", "busbar", "copper", "bronze", "brass"]):
             return "cu_alloy"
         if any(k in q for k in ["tool steel", "die steel", "hardfacing", "abrasive slurry"]):

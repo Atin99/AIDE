@@ -346,23 +346,35 @@ def run_all(comp: dict, T_K: float = 298.0, dpa_rate: float = 1e-7,
 
     # --- Penalised composite: punish uneven & catastrophic profiles ---
     # An alloy scoring 80 everywhere beats one scoring 100×4 + 0×1.
-    domain_scores = [dr.score() for dr, _, _ in results]
-    if domain_scores and weighted_mean > 0:
+    # IMPORTANT: Only consider domains with significant weight.
+    # Irrelevant domains (e.g. Nuclear for a wire query) have tiny
+    # weights and must NOT drag down the score.
+    if results and weighted_mean > 0:
         import statistics
-        n_domains = len(domain_scores)
-        min_score = min(domain_scores)
-        # 1) Coefficient-of-variation penalty  (std/mean penalises spread)
-        if n_domains > 1:
-            stdev = statistics.stdev(domain_scores)
-            cv = stdev / max(1.0, weighted_mean)
+        n = len(results)
+        # Threshold = uniform share (1/N). Domains boosted above this are
+        # "significant"; baseline domains with tiny weights are excluded.
+        uniform_share = 1.0 / max(1, n)
+        significant = [(dr.score(), eff) for dr, _, eff in results if eff >= uniform_share]
+        # Fallback: if no domain exceeds uniform share (all equal), use all
+        if not significant:
+            significant = [(dr.score(), eff) for dr, _, eff in results]
+        sig_scores = [s for s, _ in significant]
+
+        min_sig = min(sig_scores) if sig_scores else 0
+        # 1) Coefficient-of-variation penalty on significant domains
+        if len(sig_scores) > 1:
+            stdev = statistics.stdev(sig_scores)
+            sig_mean = sum(s * w for s, w in significant) / max(1e-9, sum(w for _, w in significant))
+            cv = stdev / max(1.0, sig_mean)
         else:
             cv = 0.0
-        cv_penalty = max(0.5, 1.0 - 0.5 * cv)       # at most halves the score
-        # 2) Catastrophe penalty for any domain < 20
-        if min_score >= 20:
+        cv_penalty = max(0.55, 1.0 - 0.45 * cv)
+        # 2) Catastrophe penalty only on significant domains
+        if min_sig >= 20:
             catastrophe = 1.0
         else:
-            catastrophe = max(0.25, min_score / 20.0)  # 0 → 0.25, 10 → 0.75, 20 → 1.0
+            catastrophe = max(0.30, min_sig / 20.0)
         composite = weighted_mean * cv_penalty * catastrophe
     else:
         composite = weighted_mean

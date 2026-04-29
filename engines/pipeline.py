@@ -445,8 +445,10 @@ def _apply_intent_to_wt(wt, intent, query=""):
     if "conductivity" in props or intent.get("application") == "electronic_alloy":
         if any(k in q for k in ["semiconductor", "wafer"]) and "Si" not in exclude:
             wt = _set_floor(wt, "Si", 0.15)
-        elif "Cu" not in exclude:
+        elif dominant_el == "Cu" and "Cu" not in exclude:
             wt = _set_floor(wt, "Cu", 0.35)
+        elif dominant_el == "Al" and "Al" not in exclude:
+            wt = _set_floor(wt, "Al", 0.50)
         if any(k in q for k in ["bond wire", "wire bond"]):
             for el, floor in {"Ag": 0.04, "Au": 0.02}.items():
                 if el not in exclude:
