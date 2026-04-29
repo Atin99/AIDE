@@ -1323,7 +1323,9 @@ class PhysicsMLEvaluator:
                  intent=None):
         """Evaluate candidates using the 42-domain physics engine.
         
-        Score = raw physics composite_score. No additional penalty layers.
+        Score = physics composite with CV+catastrophe penalty.
+        Balanced alloys (consistent across domains) score higher than
+        alloys with the same mean but catastrophic weaknesses.
         """
         from physics.filter import run_all
         for cand in candidates:
